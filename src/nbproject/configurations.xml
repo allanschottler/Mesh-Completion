@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configurationDescriptor version="94">
+  <logicalFolder name="root" displayName="root" projectFiles="true" kind="ROOT">
+    <df root="." name="0">
+      <in>CornerTable.cpp</in>
+      <in>MainWindow.cpp</in>
+      <in>MeshCompletionApplication.cpp</in>
+      <in>MeshGeometry.cpp</in>
+      <in>MeshLoader.cpp</in>
+      <in>WireframeGeometry.cpp</in>
+      <in>main.cpp</in>
+      <in>osggtkdrawingarea.cpp</in>
+    </df>
+    <logicalFolder name="ExternalFiles"
+                   displayName="Important Files"
+                   projectFiles="false"
+                   kind="IMPORTANT_FILES_FOLDER">
+      <itemPath>../Makefile</itemPath>
+    </logicalFolder>
+  </logicalFolder>
+  <sourceFolderFilter>^(nbproject)$</sourceFolderFilter>
+  <sourceRootList>
+    <Elem>.</Elem>
+  </sourceRootList>
+  <projectmakefile>../Makefile</projectmakefile>
+  <confs>
+    <conf name="Default" type="0">
+      <toolsSet>
+        <compilerSet>default</compilerSet>
+        <dependencyChecking>false</dependencyChecking>
+        <rebuildPropChanged>false</rebuildPropChanged>
+      </toolsSet>
+      <flagsDictionary>
+        <element flagsID="0" commonFlags="-std=c++11"/>
+      </flagsDictionary>
+      <codeAssistance>
+      </codeAssistance>
+      <makefileType>
+        <makeTool>
+          <buildCommandWorkingDir>..</buildCommandWorkingDir>
+          <buildCommand>${MAKE} -f Makefile</buildCommand>
+          <cleanCommand>${MAKE} -f Makefile clean</cleanCommand>
+          <executablePath>/nethome/v/allanws/Pessoais/Mestrado/GMP/Trab1/bin/mc</executablePath>
+          <ccTool>
+            <incDir>
+              <pElem>..</pElem>
+              <pElem>../../../../../../../p/libs/libsgtk_64/include/gtkglext-1.0</pElem>
+              <pElem>../../../../../../../p/libs/libsgtk_64/lib/gtkglext-1.0/include</pElem>
+              <pElem>../../../../../../../p/libs/libsgtk_64/include/gtk-2.0</pElem>
+              <pElem>../../../../../../../p/libs/libsgtk_64/lib/gtk-2.0/include</pElem>
+              <pElem>../../../../../../../p/libs/libsgtk_64/include/pango-1.0</pElem>
+              <pElem>../../../../../../../p/libs/libsgtk_64/include/gio-unix-2.0</pElem>
+              <pElem>../../../../../../../p/libs/libsgtk_64/include</pElem>
+              <pElem>../../../../../../../p/libs/libsgtk_64/include/gdk-pixbuf-2.0</pElem>
+              <pElem>../../../../../../../p/libs/libsgtk_64/include/cairo</pElem>
+              <pElem>../../../../../../../p/libs/libsgtk_64/include/glib-2.0</pElem>
+              <pElem>../../../../../../../p/libs/libsgtk_64/lib/glib-2.0/include</pElem>
+              <pElem>../../../../../../../p/libs/libsgtk_64/include/pixman-1</pElem>
+              <pElem>../../../../../../../p/libs/libsgtk_64/include/freetype2</pElem>
+              <pElem>../../../../../../../p/libs/libsgtk_64/include/libpng15</pElem>
+              <pElem>../../../../../../../p/libs/libsgtk_64/include/atk-1.0</pElem>
+              <pElem>../../../../../../../p/libs/OSG3.2/include</pElem>
+            </incDir>
+            <preprocessorList>
+              <Elem>_GLIBCXX_PARALLEL</Elem>
+            </preprocessorList>
+          </ccTool>
+        </makeTool>
+      </makefileType>
+      <item path="CornerTable.cpp" ex="false" tool="1" flavor2="8">
+      </item>
+      <item path="MainWindow.cpp" ex="false" tool="1" flavor2="8">
+      </item>
+      <item path="MeshCompletionApplication.cpp" ex="false" tool="1" flavor2="8">
+      </item>
+      <item path="MeshGeometry.cpp" ex="false" tool="1" flavor2="8">
+      </item>
+      <item path="MeshLoader.cpp" ex="false" tool="1" flavor2="8">
+      </item>
+      <item path="WireframeGeometry.cpp" ex="false" tool="1" flavor2="8">
+      </item>
+      <item path="main.cpp" ex="false" tool="1" flavor2="8">
+      </item>
+      <item path="osggtkdrawingarea.cpp" ex="false" tool="1" flavor2="8">
+      </item>
+    </conf>
+  </confs>
+</configurationDescriptor>

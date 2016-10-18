@@ -1,0 +1,15 @@
+Compiled src/CornerTableApplication.cpp successfully!
+Compiled src/CornerTable.cpp successfully!
+src/main.cpp: In function ‘int main(int, char**)’:
+src/main.cpp:13:29: warning: unused variable ‘application’ [-Wunused-variable]
+     CornerTableApplication* application = CornerTableApplication::getInstance();
+                             ^
+Compiled src/main.cpp successfully!
+Compiled src/MainWindow.cpp successfully!
+Compiled src/MeshGeometry.cpp successfully!
+Compiled src/MeshLoader.cpp successfully!
+Compiled src/osggtkdrawingarea.cpp successfully!
+Compiled src/PointGenerator.cpp successfully!
+Compiled src/PointPickHandler.cpp successfully!
+Compiled src/WireframeGeometry.cpp successfully!
+Linking complete!
