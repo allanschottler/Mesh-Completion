@@ -12,12 +12,15 @@
 #include "CornerTable.h"
 #include "MeshGeometry.h"
 #include "WireframeGeometry.h"
+#include "BoundaryGeometry.h"
 #include <memory>
+    
+typedef std::vector< CornerType > HoleBoundary;
 
 class MeshCompletionApplication 
 {
 public:
-    
+        
     virtual ~MeshCompletionApplication();
     
     static MeshCompletionApplication* getInstance();
@@ -26,26 +29,36 @@ public:
     
     void setLightingEnabled( bool isLightingEnabled );
     
-    void setWireframeEnabled( bool isLightingEnabled );
-        
+    void setWireframeEnabled( bool isLightingEnabled );        
+    
+    void calculateHoleBoundaries();
+    
 private:
     
-    MeshCompletionApplication();
-    
+    MeshCompletionApplication();    
     
     static MeshCompletionApplication* _instance;
     
+    void buildGeometries();
+        
     MainWindow* _window;
     
     std::shared_ptr< CornerTable > _cornerTable;
     
-    osg::ref_ptr< osg::Geode > _scene;
+    osg::ref_ptr< osg::Group > _scene;
+    
+    osg::ref_ptr< osg::Geode > _rootGeode;
+    
+    osg::ref_ptr< osg::Geode > _boundariesGeode;
     
     osg::ref_ptr< MeshGeometry > _meshGeometry;
     
-    osg::ref_ptr< WireframeGeometry > _wireframeGeometry;    
+    osg::ref_ptr< WireframeGeometry > _wireframeGeometry;   
+    
     
     bool _isWireframeEnabled;
+    
+    std::vector< HoleBoundary > _boundaries;
 };
 
 #endif /* MESHCOMPLETIONAPPLICATION_H */
