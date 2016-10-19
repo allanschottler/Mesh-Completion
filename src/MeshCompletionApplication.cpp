@@ -17,6 +17,7 @@
 #include <iostream>
 #include <assert.h>
 #include <map>
+#include <tuple>
 
 MeshCompletionApplication* MeshCompletionApplication::_instance = 0;
 
@@ -216,4 +217,58 @@ void MeshCompletionApplication::calculateHoleBoundaries()
         
         _boundaries.push_back( hole );
     }    
+}
+
+std::vector< unsigned int > MeshCompletionApplication::calculateMinimumPatchMesh( HoleBoundary boundary )
+{
+    std::map< std::tuple< unsigned int, unsigned int >, int > weightSet;
+    
+    auto weightFunction = [ & ]( unsigned int i, unsigned int j, unsigned int k )
+    {
+        return 0;
+    };
+    
+    for( unsigned int i = 0; i < boundary.size() - 2; i++ )
+    {
+        weightSet[ std::make_tuple( i, i + 1 ) ] = 0;
+    }
+    
+    for( unsigned int i = 0; i < boundary.size() - 3; i++ )
+    {
+        weightSet[ std::make_tuple( i, i + 2 ) ] = weightFunction( i, i + 1, i + 2 );
+    }
+    
+    unsigned int j = 2;
+    int minIndex = -1;
+    
+    while( j < boundary.size() - 1 )
+    {
+        j++;
+        
+        for( unsigned int i = 0; i < boundary.size() - j - 1; i++ )
+        {
+            unsigned int k = i + j;
+            
+            int minWeight = INT_MAX;
+            
+            for( unsigned int m = i + 1; m < k - 1; m++ )
+            {
+                int wim = weightSet[ std::make_tuple( i, m ) ];
+                int wmk = weightSet[ std::make_tuple( m, k ) ];
+                int f = weightFunction( i, m, k );
+                int total = wim + wmk + f;
+                
+                if( total < minWeight )
+                {
+                    minWeight = total;
+                    minIndex = m;
+                }
+            }
+            
+            weightSet[ std::make_tuple( i, k ) ] = minWeight;
+        }
+    }
+    
+    std::cout << "INDEX (" << minIndex << ") MINIMUM WEIGHT = " << weightSet[ std::make_tuple( 0, boundary.size() - 1 ) ] << "\n";
+    return {};
 }

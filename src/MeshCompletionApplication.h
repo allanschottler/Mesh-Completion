@@ -33,6 +33,8 @@ public:
     
     void calculateHoleBoundaries();
     
+    std::vector< unsigned int > calculateMinimumPatchMesh( HoleBoundary boundary );
+    
 private:
     
     MeshCompletionApplication();    
