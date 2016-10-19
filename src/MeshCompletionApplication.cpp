@@ -18,6 +18,8 @@
 #include <assert.h>
 #include <map>
 #include <tuple>
+#include <functional>
+#include <math.h>
 
 MeshCompletionApplication* MeshCompletionApplication::_instance = 0;
 
@@ -85,11 +87,20 @@ void MeshCompletionApplication::buildGeometries()
             vertices.push_back( _cornerTable->getAttributes()[ 3 * iVertex ] );
             vertices.push_back( _cornerTable->getAttributes()[ 3 * iVertex + 1 ] );
             vertices.push_back( _cornerTable->getAttributes()[ 3 * iVertex + 2 ] );
-        }
+        }        
         
-        osg::ref_ptr< BoundaryGeometry > boundaryGeometry = new BoundaryGeometry( vertices ); 
+        auto indexArray = calculateMinimumPatchMesh( boundary );
+        
+        auto patchCornerTable = std::make_shared< CornerTable >
+            ( indexArray.data(), vertices.data(), indexArray.size() / 3, vertices.size() / 3, 3 );
+        
+        osg::ref_ptr< BoundaryGeometry > boundaryGeometry = new BoundaryGeometry( patchCornerTable ); 
+        osg::ref_ptr< MeshGeometry > patchMeshGeometry = new MeshGeometry( patchCornerTable ); 
+        osg::ref_ptr< WireframeGeometry > patchWireframGeometry = new WireframeGeometry( patchCornerTable ); 
         
         _boundariesGeode->addDrawable( boundaryGeometry );   
+        _rootGeode->addDrawable( patchMeshGeometry );   
+        _rootGeode->addDrawable( patchWireframGeometry );   
     }
     
     _scene->addChild( _boundariesGeode );
@@ -97,8 +108,8 @@ void MeshCompletionApplication::buildGeometries()
     _rootGeode->addDrawable( _meshGeometry );   
     
     if( _isWireframeEnabled )
-        _rootGeode->addDrawable( _wireframeGeometry );       
-    
+        _rootGeode->addDrawable( _wireframeGeometry );
+        
     // Finalize
     _rootGeode->setInitialBound( _scene->computeBound() );
     
@@ -120,7 +131,7 @@ bool MeshCompletionApplication::openFile( std::string file )
     
     calculateHoleBoundaries();
     
-    buildGeometries();
+    buildGeometries();    
     
     return true;
 }
@@ -215,48 +226,73 @@ void MeshCompletionApplication::calculateHoleBoundaries()
         
         boundaryEdges.erase( oldIt );
         
+        std::reverse( hole.begin(), hole.end() );
+        
         _boundaries.push_back( hole );
     }    
 }
 
-std::vector< unsigned int > MeshCompletionApplication::calculateMinimumPatchMesh( HoleBoundary boundary )
-{
-    std::map< std::tuple< unsigned int, unsigned int >, int > weightSet;
+std::vector< CornerType > MeshCompletionApplication::calculateMinimumPatchMesh( HoleBoundary boundary )
+{          
+    std::map< std::tuple< CornerType, CornerType >, std::tuple< CornerType, DihedralAngleWeight > > weightSet;
     
-    auto weightFunction = [ & ]( unsigned int i, unsigned int j, unsigned int k )
-    {
-        return 0;
+    CornerType n = ( CornerType )boundary.size();
+    
+    auto weightFunction = [ & ]( CornerType vi, CornerType vj, CornerType vk )
+    {        
+        osg::Vec3d v1( 
+            _cornerTable->getAttributes()[ 3 * vi ], 
+            _cornerTable->getAttributes()[ 3 * vi + 1 ], 
+            _cornerTable->getAttributes()[ 3 * vi + 2 ] );
+        
+        osg::Vec3d v2( 
+            _cornerTable->getAttributes()[ 3 * vj ], 
+            _cornerTable->getAttributes()[ 3 * vj + 1 ], 
+            _cornerTable->getAttributes()[ 3 * vj + 2 ] );
+        
+        osg::Vec3d v3( 
+            _cornerTable->getAttributes()[ 3 * vk ], 
+            _cornerTable->getAttributes()[ 3 * vk + 1 ], 
+            _cornerTable->getAttributes()[ 3 * vk + 2 ] );
+        
+        double a = ( v2 - v1 ).length();
+        double b = ( v2 - v3 ).length();
+        double c = ( v3 - v1 ).length();
+        
+        double area = 0.5 * a * b * sin( c );
+        double angle = 0;
+        
+        return DihedralAngleWeight( angle, area );
     };
     
-    for( unsigned int i = 0; i < boundary.size() - 2; i++ )
+    for( CornerType i = 0; i <= n - 2; i++ )
     {
-        weightSet[ std::make_tuple( i, i + 1 ) ] = 0;
+        weightSet[ std::make_tuple( i, i + 1 ) ] = std::make_tuple( -1, DihedralAngleWeight() );
     }
     
-    for( unsigned int i = 0; i < boundary.size() - 3; i++ )
+    for( CornerType i = 0; i <= n - 3; i++ )
     {
-        weightSet[ std::make_tuple( i, i + 2 ) ] = weightFunction( i, i + 1, i + 2 );
+        weightSet[ std::make_tuple( i, i + 2 ) ] = std::make_tuple( i + 1, weightFunction( i, i + 1, i + 2 ) );
     }
     
-    unsigned int j = 2;
-    int minIndex = -1;
+    CornerType j = 2;    
     
-    while( j < boundary.size() - 1 )
-    {
+    while( j < n - 1 )
+    {                
         j++;
         
-        for( unsigned int i = 0; i < boundary.size() - j - 1; i++ )
+        for( CornerType i = 0; i <= n - j - 1; i++ )
         {
-            unsigned int k = i + j;
+            CornerType k = i + j;
+            int minIndex = -1;
+            DihedralAngleWeight minWeight( DBL_MAX, DBL_MAX );
             
-            int minWeight = INT_MAX;
-            
-            for( unsigned int m = i + 1; m < k - 1; m++ )
+            for( CornerType m = i + 1; m <= k - 1; m++ )
             {
-                int wim = weightSet[ std::make_tuple( i, m ) ];
-                int wmk = weightSet[ std::make_tuple( m, k ) ];
-                int f = weightFunction( i, m, k );
-                int total = wim + wmk + f;
+                DihedralAngleWeight wim = std::get< 1 >( weightSet[ std::make_tuple( i, m ) ] );
+                DihedralAngleWeight wmk = std::get< 1 >( weightSet[ std::make_tuple( m, k ) ] );
+                DihedralAngleWeight f = weightFunction( i, m, k );
+                DihedralAngleWeight total = wim + wmk + f;
                 
                 if( total < minWeight )
                 {
@@ -265,10 +301,41 @@ std::vector< unsigned int > MeshCompletionApplication::calculateMinimumPatchMesh
                 }
             }
             
-            weightSet[ std::make_tuple( i, k ) ] = minWeight;
+            weightSet[ std::make_tuple( i, k ) ] = std::make_tuple( minIndex, minWeight );
         }
-    }
+    }        
     
-    std::cout << "INDEX (" << minIndex << ") MINIMUM WEIGHT = " << weightSet[ std::make_tuple( 0, boundary.size() - 1 ) ] << "\n";
-    return {};
+    std::vector< CornerType > indexes; 
+    
+    std::function< void ( CornerType, CornerType ) > trace = [ & ]( CornerType i, CornerType k )
+    {
+        if( i + 2 == k )
+        {
+            indexes.push_back( i );
+            indexes.push_back( i + 1 );
+            indexes.push_back( k );
+        }
+        else
+        {
+            CornerType o = std::get< 0 >( weightSet[ std::make_tuple( i, k ) ] );
+            
+            if( o != i + 1 )
+                trace( i, o );
+            
+            indexes.push_back( i );
+            indexes.push_back( o );
+            indexes.push_back( k );
+            
+            if( o != k - 1 )
+                trace( o, k );
+        }
+    };
+    
+    trace( 0, n - 1 );
+    
+    //auto weight = weightSet[ std::make_tuple( 0, n - 1 ) ];
+    
+    //std::cout << "INDEX (" << std::get< 0 >( weight ) << ") MINIMUM WEIGHT = " << ( std::get< 1 >( weight ) ). << "\n";
+    
+    return indexes;
 }

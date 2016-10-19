@@ -9,9 +9,9 @@
 
 #include "BoundaryGeometry.h"
 
-BoundaryGeometry::BoundaryGeometry( std::vector< double > vertices ) 
+BoundaryGeometry::BoundaryGeometry( std::shared_ptr< CornerTable > cornerTable ) 
 {
-    buildGeometry( vertices );
+    buildGeometry( cornerTable );
 }
 
 
@@ -20,8 +20,10 @@ BoundaryGeometry::~BoundaryGeometry()
 }
 
 
-void BoundaryGeometry::buildGeometry( std::vector< double > vertices )
+void BoundaryGeometry::buildGeometry( std::shared_ptr< CornerTable > cornerTable )
 {
+    double* vertexBuffer = cornerTable->getAttributes();
+    std::vector< double > vertices( vertexBuffer, vertexBuffer + cornerTable->getNumberVertices() * 3 );
     osg::ref_ptr< osg::Vec3Array > vertexArray = new osg::Vec3Array;
     osg::ref_ptr< osg::Vec4Array > colorArray = new osg::Vec4Array;
     osg::ref_ptr< osg::DrawElementsUInt > indexArray = new osg::DrawElementsUInt( osg::PrimitiveSet::LINE_LOOP, 0 );

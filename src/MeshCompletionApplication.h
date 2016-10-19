@@ -21,6 +21,29 @@ class MeshCompletionApplication
 {
 public:
         
+    class DihedralAngleWeight
+    {
+    public:
+        
+        DihedralAngleWeight() { area = 0; angle = 0; };
+        
+        DihedralAngleWeight( double an, double ar ) { area = ar; angle = an; };
+        
+        double angle, area;
+        
+        inline DihedralAngleWeight& operator+( const DihedralAngleWeight& rdaw )
+        {
+            this->area += rdaw.area;
+            this->angle = MAX( this->angle, rdaw.angle );
+            return *this;
+        }
+        
+        inline bool operator<( const DihedralAngleWeight& rdaw )
+        {
+            return ( this->angle < rdaw.angle ) || ( ( this->angle == rdaw.angle ) && ( this->area < rdaw.area ) );
+        }
+    };
+    
     virtual ~MeshCompletionApplication();
     
     static MeshCompletionApplication* getInstance();
@@ -33,7 +56,7 @@ public:
     
     void calculateHoleBoundaries();
     
-    std::vector< unsigned int > calculateMinimumPatchMesh( HoleBoundary boundary );
+    std::vector< CornerType > calculateMinimumPatchMesh( HoleBoundary boundary );
     
 private:
     

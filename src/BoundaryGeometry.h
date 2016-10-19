@@ -9,18 +9,21 @@
 #define	BOUNDARYGEOMETRY_H
 
 #include <osg/Geometry>
+#include <memory>
+
+#include "CornerTable.h"
 
 class BoundaryGeometry : public osg::Geometry
 {
 public:
     
-    BoundaryGeometry( std::vector< double > vertices );
+    BoundaryGeometry( std::shared_ptr< CornerTable > cornerTable );
     
     virtual ~BoundaryGeometry();
     
 private:
 
-    void buildGeometry( std::vector< double > vertices );
+    void buildGeometry( std::shared_ptr< CornerTable > cornerTable );
 };
 
 #endif	/* BOUNDARYGEOMETRY_H */
