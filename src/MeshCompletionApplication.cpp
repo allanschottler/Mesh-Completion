@@ -255,12 +255,131 @@ std::vector< CornerType > MeshCompletionApplication::calculateMinimumPatchMesh( 
             _cornerTable->getAttributes()[ 3 * vk + 1 ], 
             _cornerTable->getAttributes()[ 3 * vk + 2 ] );
         
-        double a = ( v2 - v1 ).length();
+        double a = ( v2 - v1 ).length(); 
         double b = ( v2 - v3 ).length();
         double c = ( v3 - v1 ).length();
         
         double area = 0.5 * a * b * sin( c );
+        
         double angle = 0;
+        
+        auto calculateDihedralAngle = [ & ]( CornerType vl, CornerType vm, CornerType vn )
+        {
+            osg::Vec3d v1( 
+                _cornerTable->getAttributes()[ 3 * boundary[ vi ] ],
+                _cornerTable->getAttributes()[ 3 * boundary[ vi ] + 1 ],
+                _cornerTable->getAttributes()[ 3 * boundary[ vi ] + 2 ] );
+            
+            osg::Vec3d v2( 
+                _cornerTable->getAttributes()[ 3 * boundary[ vj ] ],
+                _cornerTable->getAttributes()[ 3 * boundary[ vj ] + 1 ],
+                _cornerTable->getAttributes()[ 3 * boundary[ vj ] + 2 ] );
+            
+            osg::Vec3d v3( 
+                _cornerTable->getAttributes()[ 3 * boundary[ vk ] ],
+                _cornerTable->getAttributes()[ 3 * boundary[ vk ] + 1 ],
+                _cornerTable->getAttributes()[ 3 * boundary[ vk ] + 2 ] );            
+            
+            osg::Vec3d e1 = ( v2 - v1 );
+            osg::Vec3d e2 = ( v3 - v1 );
+            
+            osg::Vec3d normal1 = e1 ^ e2;
+                        
+            osg::Vec3d v4( 
+                _cornerTable->getAttributes()[ 3 * vl ],
+                _cornerTable->getAttributes()[ 3 * vl + 1 ],
+                _cornerTable->getAttributes()[ 3 * vl + 2 ] );
+            
+            osg::Vec3d v5( 
+                _cornerTable->getAttributes()[ 3 * vm ],
+                _cornerTable->getAttributes()[ 3 * vm + 1 ],
+                _cornerTable->getAttributes()[ 3 * vm + 2 ] );
+            
+            osg::Vec3d v6( 
+                _cornerTable->getAttributes()[ 3 * vn ],
+                _cornerTable->getAttributes()[ 3 * vn + 1 ],
+                _cornerTable->getAttributes()[ 3 * vn + 2 ] );  
+            
+            osg::Vec3d e3 = ( v5 - v4 );
+            osg::Vec3d e4 = ( v6 - v4 );
+            
+            osg::Vec3d normal2 = e3 ^ e4;
+            
+            return acos( normal1 * normal2 );
+        };
+        
+        auto findCommonTriangle = [ & ]( std::vector< CornerType > n1, std::vector< CornerType > n2 )
+        {
+            for( auto c1 : n1 )
+            {
+                for( auto c2 : n2 )
+                {
+                    CornerType t1 = _cornerTable->cornerTriangle( c1 );
+                    CornerType t2 = _cornerTable->cornerTriangle( c2 );
+                    
+                    if( t1 == t2 )
+                        return t1;
+                }
+            }
+            
+            return CornerTable::BORDER_CORNER;
+        };
+        
+        if( vj == vi + 1 && vk == vj + 1 )
+        {
+            CornerType c1 = _cornerTable->vertexToCornerIndex( boundary[ vi ] );
+            CornerType c2 = _cornerTable->vertexToCornerIndex( boundary[ vj ] );
+            CornerType c3 = _cornerTable->vertexToCornerIndex( boundary[ vk ] );        
+            
+            auto c1Neighbours = _cornerTable->getCornerNeighbours( c1 );
+            auto c2Neighbours = _cornerTable->getCornerNeighbours( c2 );
+            auto c3Neighbours = _cornerTable->getCornerNeighbours( c3 );
+            
+            CornerType t1 = findCommonTriangle( c1Neighbours, c2Neighbours );
+            CornerType t2 = findCommonTriangle( c2Neighbours, c3Neighbours );
+            
+            assert( t1 != CornerTable::BORDER_CORNER && t2 != CornerTable::BORDER_CORNER );            
+            
+            CornerType t1v1 = 3 * t1;
+            CornerType t1v2 = 3 * t1 + 1;
+            CornerType t1v3 = 3 * t1 + 2;
+            
+            CornerType t2v1 = 3 * t2;
+            CornerType t2v2 = 3 * t2 + 1;
+            CornerType t2v3 = 3 * t2 + 2;
+            
+            angle = MAX(
+                    calculateDihedralAngle( t1v1, t1v2, t1v3 ), 
+                    calculateDihedralAngle( t2v1, t2v2, t2v3 ) );
+        }
+        else
+        {
+            CornerType vij = std::get< 0 >( weightSet[ std::make_tuple( vi, vj ) ] );
+            CornerType vjk = std::get< 0 >( weightSet[ std::make_tuple( vj, vk ) ] );
+            
+            angle = MAX( 
+                    calculateDihedralAngle( boundary[ vi ], boundary[ vij ], boundary[ vj ] ), 
+                    calculateDihedralAngle( boundary[ vj ], boundary[ vjk ], boundary[ vk ] ) );
+            
+            if( vi == 0 && vk == n - 1 )
+            {
+                CornerType c1 = _cornerTable->vertexToCornerIndex( boundary[ 0 ] );
+                CornerType c2 = _cornerTable->vertexToCornerIndex( boundary[ n - 1 ] );
+            
+                auto c1Neighbours = _cornerTable->getCornerNeighbours( c1 );
+                auto c2Neighbours = _cornerTable->getCornerNeighbours( c2 );
+
+                CornerType t = findCommonTriangle( c1Neighbours, c2Neighbours );
+                
+                CornerType v1 = 3 * t;
+                CornerType v2 = 3 * t + 1;
+                CornerType v3 = 3 * t + 2;
+                
+                angle = MAX(
+                    angle, 
+                    calculateDihedralAngle( v1, v2, v3 ) );
+            }
+        }
         
         return DihedralAngleWeight( angle, area );
     };
@@ -332,10 +451,6 @@ std::vector< CornerType > MeshCompletionApplication::calculateMinimumPatchMesh( 
     };
     
     trace( 0, n - 1 );
-    
-    //auto weight = weightSet[ std::make_tuple( 0, n - 1 ) ];
-    
-    //std::cout << "INDEX (" << std::get< 0 >( weight ) << ") MINIMUM WEIGHT = " << ( std::get< 1 >( weight ) ). << "\n";
     
     return indexes;
 }
