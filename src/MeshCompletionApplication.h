@@ -62,6 +62,9 @@ private:
     
     MeshCompletionApplication();    
     
+    double calculateDihedralAngle( CornerType vi, CornerType vj, CornerType vk,
+                               CornerType vl, CornerType vm, CornerType vn );
+    
     static MeshCompletionApplication* _instance;
     
     void buildGeometries();
