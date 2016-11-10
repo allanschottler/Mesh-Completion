@@ -94,6 +94,8 @@ void MeshCompletionApplication::buildGeometries()
         auto patchCornerTable = std::make_shared< CornerTable >
             ( indexArray.data(), vertices.data(), indexArray.size() / 3, vertices.size() / 3, 3 );
         
+        patchCornerTable = calculateRefinedPatchMesh( patchCornerTable, boundary );
+        
         osg::ref_ptr< BoundaryGeometry > boundaryGeometry = new BoundaryGeometry( patchCornerTable ); 
         osg::ref_ptr< MeshGeometry > patchMeshGeometry = new MeshGeometry( patchCornerTable ); 
         osg::ref_ptr< WireframeGeometry > patchWireframGeometry = new WireframeGeometry( patchCornerTable ); 
@@ -282,7 +284,7 @@ double MeshCompletionApplication::calculateDihedralAngle( CornerType vi, CornerT
     return std::acos( cross );
 }
         
-std::vector< CornerType > MeshCompletionApplication::calculateMinimumPatchMesh( HoleBoundary boundary )
+HoleBoundary MeshCompletionApplication::calculateMinimumPatchMesh( HoleBoundary boundary )
 {          
     std::map< std::tuple< CornerType, CornerType >, std::tuple< CornerType, DihedralAngleWeight > > weightSet;
     
@@ -460,4 +462,211 @@ std::vector< CornerType > MeshCompletionApplication::calculateMinimumPatchMesh( 
     trace( 0, n - 1 );
     
     return indexes;
+}
+
+osg::Vec3 MeshCompletionApplication::calculateCentroid( std::shared_ptr< CornerTable > patch, CornerType vi, CornerType vj, CornerType vk )
+{
+    osg::Vec3d v1( 
+        patch->getAttributes()[ 3 * vi ], 
+        patch->getAttributes()[ 3 * vi + 1 ], 
+        patch->getAttributes()[ 3 * vi + 2 ] );
+       
+    osg::Vec3d v2( 
+        patch->getAttributes()[ 3 * vj ], 
+        patch->getAttributes()[ 3 * vj + 1 ], 
+        patch->getAttributes()[ 3 * vj + 2 ] );
+        
+    osg::Vec3d v3( 
+        patch->getAttributes()[ 3 * vk ], 
+        patch->getAttributes()[ 3 * vk + 1 ], 
+        patch->getAttributes()[ 3 * vk + 2 ] );
+    
+    return (v1 + v2 + v3) / 3;
+}
+    
+bool MeshCompletionApplication::relaxAllEdges( std::vector< double >& vertexArray, HoleBoundary& indexArray )
+{
+    bool hasRelaxed = false;
+    
+    CornerTable* relaxationTable = new CornerTable( indexArray.data(), vertexArray.data(),
+                                            indexArray.size() / 3, vertexArray.size() / 3, 3 );
+    
+    int nCorners = relaxationTable->getNumTriangles() * 3;
+    
+    for( int iCorner = 0; iCorner < nCorners; iCorner++ )
+    {
+        //if( isInCircumSphere )
+        //{
+        hasRelaxed = true;
+        relaxationTable->edgeFlip( iCorner );
+        //}
+    }
+    
+    indexArray = HoleBoundary( relaxationTable->getTriangleList(), 
+            relaxationTable->getTriangleList() + relaxationTable->getNumTriangles() * 3 );
+    delete relaxationTable;
+    
+    return hasRelaxed;
+}
+    
+std::shared_ptr< CornerTable > MeshCompletionApplication::calculateRefinedPatchMesh( std::shared_ptr< CornerTable > patchMesh, HoleBoundary boundary )
+{
+    auto densityControl = M_SQRT2;
+    
+    std::vector< double > scaleAttributes;
+    std::vector< double > newVertexArray( 
+        patchMesh->getAttributes(), 
+        patchMesh->getAttributes() + patchMesh->getNumberVertices() * patchMesh->getNumberAttributesByVertex() );
+    HoleBoundary newIndexArray;
+    HoleBoundary boundaryIndexArray( 
+        patchMesh->getTriangleList(),
+        patchMesh->getTriangleList() + patchMesh->getNumTriangles() * 3 );
+    
+    // Calcula averages
+    for( auto iVertex : boundary )
+    {
+        double average = _cornerTable->getVertexAverageEdgeLength( iVertex );
+        scaleAttributes.push_back( average );
+    }
+    
+    bool hadCreatedTriangles = false;
+    bool hasDoneSwaps = false;
+    
+    auto makeTriangle = [ & ]( CornerType i, CornerType j, CornerType k )
+    {
+        newIndexArray.push_back( i );
+        newIndexArray.push_back( j );
+        newIndexArray.push_back( k );
+    };
+    
+    while( !hasDoneSwaps )
+    {
+        std::vector< CornerType > verticesToFlip;
+        
+        for( unsigned int iTriangle = 0; iTriangle < boundaryIndexArray.size(); iTriangle += 3 )
+        {
+            CornerType vi = boundaryIndexArray[ iTriangle ];
+            CornerType vj = boundaryIndexArray[ iTriangle + 1 ];
+            CornerType vk = boundaryIndexArray[ iTriangle + 2 ];
+
+            osg::Vec3 v1( patchMesh->getAttributes()[ 3 * vi ],
+                          patchMesh->getAttributes()[ 3 * vi + 1 ],
+                          patchMesh->getAttributes()[ 3 * vi + 2 ] );
+            
+            osg::Vec3 v2( patchMesh->getAttributes()[ 3 * vj ],
+                          patchMesh->getAttributes()[ 3 * vj + 1 ],
+                          patchMesh->getAttributes()[ 3 * vj + 2 ] );
+            
+            osg::Vec3 v3( patchMesh->getAttributes()[ 3 * vk ],
+                          patchMesh->getAttributes()[ 3 * vk + 1 ],
+                          patchMesh->getAttributes()[ 3 * vk + 2 ] );
+
+            auto centroid = calculateCentroid( patchMesh, vi, vj, vk );
+            float centroidScaleAttribute = 
+                (scaleAttributes[ iTriangle ] + scaleAttributes[ iTriangle + 1 ] + scaleAttributes[ iTriangle + 2 ]) / 3;
+
+            if( densityControl * (centroid - v1).length() > centroidScaleAttribute && densityControl * (centroid - v1).length() > scaleAttributes[ vi ] &&
+                densityControl * (centroid - v2).length() > centroidScaleAttribute && densityControl * (centroid - v2).length() > scaleAttributes[ vj ] &&
+                densityControl * (centroid - v3).length() > centroidScaleAttribute && densityControl * (centroid - v3).length() > scaleAttributes[ vk ] )
+            {
+                hadCreatedTriangles = true;                
+                //trianglesToSplit.push_back( std::make_pair( iTriangle, centroid ) );
+                                
+                newVertexArray.push_back( centroid.x() );
+                newVertexArray.push_back( centroid.y() );
+                newVertexArray.push_back( centroid.z() );
+                
+                unsigned int c = newVertexArray.size() / 3 - 1;
+                makeTriangle( c, vj, vk );
+                makeTriangle( vi, c, vk );
+                makeTriangle( vi, vj, c );
+                
+                verticesToFlip.push_back( c );
+                scaleAttributes.push_back( ( scaleAttributes[ vi ] + scaleAttributes[ vj ] + scaleAttributes[ vk ] ) / 3 );
+            }
+            else
+            {
+                makeTriangle( vi, vj, vk );
+            }
+        }
+        
+        if( !hadCreatedTriangles )
+            break;
+        
+        CornerTable* relaxationTable = new CornerTable(newIndexArray.data(), newVertexArray.data(),
+                newIndexArray.size() / 3, newVertexArray.size() / 3, 3);
+
+        for( auto vertex : verticesToFlip )
+        {
+            auto neighbourCorners = relaxationTable->getCornerNeighbours(relaxationTable->vertexToCornerIndex(vertex));
+
+            for(auto neighbour : neighbourCorners) {
+                //if( isInCircumSphere )
+                //{
+                relaxationTable->edgeFlip(neighbour);
+                //}
+            }
+        }
+
+        newIndexArray = HoleBoundary(relaxationTable->getTriangleList(),
+                relaxationTable->getTriangleList() + relaxationTable->getNumTriangles() * 3);
+        delete relaxationTable;
+        
+        //int currentSplitIndex = 0;
+        
+        /*for( unsigned int iTriangle = 0; iTriangle < boundaryIndexArray.size(); iTriangle += 3 )
+        {
+            CornerType vi = boundaryIndexArray[ iTriangle ];
+            CornerType vj = boundaryIndexArray[ iTriangle + 1 ];
+            CornerType vk = boundaryIndexArray[ iTriangle + 2 ];
+            
+            if( trianglesToSplit[ currentSplitIndex ].first == iTriangle )
+            {
+                auto centroid = trianglesToSplit[ currentSplitIndex++ ].second;
+                
+                newVertexArray.push_back( centroid.x() );
+                newVertexArray.push_back( centroid.y() );
+                newVertexArray.push_back( centroid.z() );
+                
+                unsigned int c = newVertexArray.size() / 3;
+                makeTriangle( c, vj, vk );
+                makeTriangle( vi, c, vk );
+                makeTriangle( vi, vj, c );
+                
+                //relax                
+                CornerTable* relaxationTable = new CornerTable( newIndexArray.data(), newVertexArray.data(),
+                        newIndexArray.size() / 3, newVertexArray.size() / 3, 3 );
+
+                auto neighbourCorners = relaxationTable->getCornerNeighbours(relaxationTable->vertexToCornerIndex(c));
+
+                for( auto neighbour : neighbourCorners )
+                {
+                    //if( isInCircumSphere )
+                    //{
+                    relaxationTable->edgeFlip(neighbour);
+                    //}
+                }
+                
+                newIndexArray = HoleBoundary( relaxationTable->getTriangleList(), 
+                        relaxationTable->getTriangleList() + relaxationTable->getNumTriangles() * 3 );
+                delete relaxationTable;
+            }
+            else
+            {
+                makeTriangle( vi, vj, vk );
+            }
+        }*/
+        
+        boundaryIndexArray = newIndexArray;
+        
+        do
+        {
+            hasDoneSwaps = relaxAllEdges( newVertexArray, newIndexArray );
+        } 
+        while( hasDoneSwaps );
+    }
+    
+    //DONE
+    return std::make_shared< CornerTable >( newIndexArray.data(), newVertexArray.data(),
+                        newIndexArray.size() / 3, newVertexArray.size() / 3, 3 );
 }

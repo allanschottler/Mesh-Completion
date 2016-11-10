@@ -245,6 +245,10 @@ public:
      */
     int edgeOriented( const CornerType corner, double* coordinate );
     
+    double edgeLength( const CornerType corner );
+    
+    double getVertexAverageEdgeLength( const CornerType vertex );
+    
     /**
      * Return the number of attributes by vertex.
      * @return - number of attributes by vertex.

@@ -454,6 +454,43 @@ int CornerTable::edgeOriented( const CornerType corner, double* coordinate )
 
 
 
+double CornerTable::edgeLength( const CornerType corner )
+{
+    int c0 = cornerPrevious( corner );
+    int c1 = cornerNext( corner );
+    int v0 = cornerToVertexIndex( c0 );
+    int v1 = cornerToVertexIndex( c1 );
+    
+    double Ax = getAttributes()[ _numberCoordinatesByVertex * v0 ];
+    double Ay = getAttributes()[ _numberCoordinatesByVertex * v0 + 1 ];
+    double Az = getAttributes()[ _numberCoordinatesByVertex * v0 + 2 ];
+    double Bx = getAttributes()[ _numberCoordinatesByVertex * v1 ];
+    double By = getAttributes()[ _numberCoordinatesByVertex * v1 + 1 ];
+    double Bz = getAttributes()[ _numberCoordinatesByVertex * v1 + 2 ];
+    
+    return sqrt( (Ax - Bx)*(Ax - Bx) + (Ay - By)*(Ay - By) + (Az - Bz)*(Az - Bz) );
+}
+
+
+
+double CornerTable::getVertexAverageEdgeLength( const CornerType vertex )
+{
+    double average = 0;
+    CornerType corner = vertexToCornerIndex( vertex );
+    auto neighbours = getCornerNeighbours( corner );
+    neighbours.push_back( corner );
+    
+    for( auto neighbour : neighbours )
+    {
+        CornerType next = cornerNext( neighbour );
+        average += edgeLength( next );
+    }
+    
+    return average / neighbours.size();
+}
+
+
+
 void CornerTable::buildOppositeTable( )
 {
     //The adjacency list from corner to vetices.

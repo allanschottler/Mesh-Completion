@@ -56,7 +56,9 @@ public:
     
     void calculateHoleBoundaries();
     
-    std::vector< CornerType > calculateMinimumPatchMesh( HoleBoundary boundary );
+    HoleBoundary calculateMinimumPatchMesh( HoleBoundary boundary );
+    
+    std::shared_ptr< CornerTable > calculateRefinedPatchMesh( std::shared_ptr< CornerTable > patchMesh, HoleBoundary boundary );
     
 private:
     
@@ -64,6 +66,12 @@ private:
     
     double calculateDihedralAngle( CornerType vi, CornerType vj, CornerType vk,
                                CornerType vl, CornerType vm, CornerType vn );
+    
+    osg::Vec3 calculateCentroid( std::shared_ptr< CornerTable > patch, CornerType vi, CornerType vj, CornerType vk );
+    
+    //void relaxEdge( std::vector< double >& vertexArray, std::vector< CornerType >& indexArray, CornerType corner );
+    
+    bool relaxAllEdges( std::vector< double >& vertexArray, HoleBoundary& indexArray );
     
     static MeshCompletionApplication* _instance;
     
