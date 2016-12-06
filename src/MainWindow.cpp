@@ -100,7 +100,9 @@ gboolean MainWindow::onOpenButtonClicked( GtkWidget* button, gpointer pointer )
     
     MainWindow* dialog = reinterpret_cast< MainWindow* >( result );
     
-    GtkWidget* chooseDialog;
+    MeshCompletionApplication::getInstance()->openFile( "/home/v/allanws/Pessoais/Mestrado/GMP/Trab1/data/bunny_hole.off" );
+            
+    /*GtkWidget* chooseDialog;
     chooseDialog = gtk_file_chooser_dialog_new( "Open File",
                                           GTK_WINDOW( dialog->_dialog ),
                                           GTK_FILE_CHOOSER_ACTION_OPEN,
@@ -124,7 +126,7 @@ gboolean MainWindow::onOpenButtonClicked( GtkWidget* button, gpointer pointer )
         g_free( filename );
     }
     
-    gtk_widget_destroy( chooseDialog );
+    gtk_widget_destroy( chooseDialog );*/
     
     return TRUE;
 }

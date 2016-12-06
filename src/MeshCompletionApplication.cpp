@@ -18,6 +18,7 @@
 #include <assert.h>
 #include <map>
 #include <tuple>
+#include <queue>
 #include <functional>
 #include <math.h>
 
@@ -94,11 +95,13 @@ void MeshCompletionApplication::buildGeometries()
         auto patchCornerTable = std::make_shared< CornerTable >
             ( indexArray.data(), vertices.data(), indexArray.size() / 3, vertices.size() / 3, 3 );
         
-        patchCornerTable = calculateRefinedPatchMesh( patchCornerTable, boundary );
+        auto patchRefinedCornerTable = calculateRefinedPatchMesh( patchCornerTable, boundary );
         
         osg::ref_ptr< BoundaryGeometry > boundaryGeometry = new BoundaryGeometry( patchCornerTable ); 
-        osg::ref_ptr< MeshGeometry > patchMeshGeometry = new MeshGeometry( patchCornerTable ); 
-        osg::ref_ptr< WireframeGeometry > patchWireframGeometry = new WireframeGeometry( patchCornerTable ); 
+        osg::ref_ptr< MeshGeometry > patchMeshGeometry = new MeshGeometry( patchRefinedCornerTable ); 
+        osg::ref_ptr< WireframeGeometry > patchWireframGeometry = new WireframeGeometry( patchRefinedCornerTable ); 
+//        osg::ref_ptr< MeshGeometry > patchMeshGeometry = new MeshGeometry( patchCornerTable ); 
+//        osg::ref_ptr< WireframeGeometry > patchWireframGeometry = new WireframeGeometry( patchCornerTable ); 
         
         _boundariesGeode->addDrawable( boundaryGeometry );   
         _rootGeode->addDrawable( patchMeshGeometry );   
@@ -464,6 +467,31 @@ HoleBoundary MeshCompletionApplication::calculateMinimumPatchMesh( HoleBoundary 
     return indexes;
 }
 
+TriMesh createMesh( std::vector< double >& vertexArray, std::vector< CornerType >& indexArray )
+{
+    TriMesh mesh;        
+    TriMesh::VertexHandle vhandle[ vertexArray.size() ];    
+    std::vector< TriMesh::VertexHandle > face_vhandles;
+    int nPoints = 0;
+    
+    for( unsigned int i = 0; i < vertexArray.size(); i += 3 )
+    {
+        vhandle[ nPoints++ ] = mesh.add_vertex( TriMesh::Point( vertexArray[ i ], vertexArray[ i + 1 ], vertexArray[ i + 2 ] ) );
+    }
+    
+    for( unsigned int i = 0; i < indexArray.size(); i += 3 )
+    {
+        face_vhandles.clear();
+        face_vhandles.push_back( vhandle[ indexArray[ i ] ] );
+        face_vhandles.push_back( vhandle[ indexArray[ i + 1 ] ] );
+        face_vhandles.push_back( vhandle[ indexArray[ i + 2 ] ] );
+        mesh.add_face( face_vhandles );
+    }
+    
+    return mesh;
+}
+
+
 osg::Vec3 MeshCompletionApplication::calculateCentroid( std::shared_ptr< CornerTable > patch, CornerType vi, CornerType vj, CornerType vk )
 {
     osg::Vec3d v1( 
@@ -484,33 +512,108 @@ osg::Vec3 MeshCompletionApplication::calculateCentroid( std::shared_ptr< CornerT
     return (v1 + v2 + v3) / 3;
 }
     
-bool MeshCompletionApplication::relaxAllEdges( std::vector< double >& vertexArray, HoleBoundary& indexArray )
-{
-    bool hasRelaxed = false;
+bool MeshCompletionApplication::isInCircumsphere( TriMesh& mesh, TriMesh::EdgeHandle edge )
+{        
+    TriMesh::HalfedgeHandle he1 = mesh.halfedge_handle( edge, 0 );
+    TriMesh::HalfedgeHandle he2 = mesh.halfedge_handle( edge, 1 );
     
-    CornerTable* relaxationTable = new CornerTable( indexArray.data(), vertexArray.data(),
-                                            indexArray.size() / 3, vertexArray.size() / 3, 3 );
+    TriMesh::VertexHandle vh1 = mesh.to_vertex_handle( he1 );
+    TriMesh::VertexHandle vh2 = mesh.from_vertex_handle( he1 );
+
+    TriMesh::FaceHandle fh1 = mesh.face_handle( he1 );
+    TriMesh::FaceHandle fh2 = mesh.face_handle( he2 );
     
-    int nCorners = relaxationTable->getNumTriangles() * 3;
+    TriMesh::Point p1 = mesh.point( vh1 );
+    TriMesh::Point p2 = mesh.point( vh2 );
+    TriMesh::Point p3, p4;
     
-    for( int iCorner = 0; iCorner < nCorners; iCorner++ )
+    TriMesh::FaceHalfedgeIter fh1It = mesh.fh_iter( fh1 );
+    for( ; fh1It.is_valid(); ++fh1It )
     {
-        //if( isInCircumSphere )
-        //{
-        hasRelaxed = true;
-        relaxationTable->edgeFlip( iCorner );
-        //}
+        TriMesh::VertexHandle newvh1 = mesh.to_vertex_handle( *fh1It );
+        TriMesh::VertexHandle newvh2 = mesh.from_vertex_handle( *fh1It );
+        
+        TriMesh::Point newp1 = mesh.point( newvh1 );
+        TriMesh::Point newp2 = mesh.point( newvh2 );
+        
+        if( newp1 != p1 && newp1 != p2 )
+        {
+            p3 = newp1;
+            break;
+        }
+        
+        if( newp2 != p1 && newp2 != p2 )
+        {
+            p3 = newp2;
+            break;
+        }
+    }
+   
+    TriMesh::FaceHalfedgeIter fh2It = mesh.fh_iter( fh2 );
+    for( ; fh2It.is_valid(); ++fh2It )
+    {
+        TriMesh::VertexHandle newvh1 = mesh.to_vertex_handle( *fh2It );
+        TriMesh::VertexHandle newvh2 = mesh.from_vertex_handle( *fh2It );
+        
+        TriMesh::Point newp1 = mesh.point( newvh1 );
+        TriMesh::Point newp2 = mesh.point( newvh2 );
+        
+        if( newp1 != p1 && newp1 != p2 )
+        {
+            p4 = newp1;
+            break;
+        }
+        
+        if( newp2 != p1 && newp2 != p2 )
+        {
+            p4 = newp2;
+            break;
+        }
     }
     
-    indexArray = HoleBoundary( relaxationTable->getTriangleList(), 
-            relaxationTable->getTriangleList() + relaxationTable->getNumTriangles() * 3 );
-    delete relaxationTable;
+    double radius = mesh.calc_edge_length( edge ) / 2;
+    
+    TriMesh::Point midpoint( mesh.point( vh1 ) );
+
+    midpoint +=  mesh.point( mesh.to_vertex_handle( he2 ) );    
+    midpoint *= 0.5;
+    
+    double l1 = (p3 - midpoint).length(); 
+    double l2 = (p4 - midpoint).length(); 
+          
+    return ( l1 <= radius && l2 <= radius );
+}
+
+bool MeshCompletionApplication::relaxEdge( TriMesh& mesh, TriMesh::EdgeHandle edge )
+{
+    if( !mesh.is_boundary( edge ) ) 
+    {             
+        // Flip edge
+        if( isInCircumsphere( mesh, edge ) )
+        {
+            mesh.flip( edge );
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+bool MeshCompletionApplication::relaxAllEdges( TriMesh& mesh )
+{
+    bool hasRelaxed = false;    
+        
+    for( TriMesh::EdgeIter it = mesh.edges_begin(); it != mesh.edges_end(); ++it ) 
+    {
+        if( relaxEdge( mesh, it.handle() ) )
+            hasRelaxed = true;
+    }
     
     return hasRelaxed;
 }
     
 std::shared_ptr< CornerTable > MeshCompletionApplication::calculateRefinedPatchMesh( std::shared_ptr< CornerTable > patchMesh, HoleBoundary boundary )
-{
+{        
     auto densityControl = M_SQRT2;
     
     std::vector< double > scaleAttributes;
@@ -518,7 +621,7 @@ std::shared_ptr< CornerTable > MeshCompletionApplication::calculateRefinedPatchM
         patchMesh->getAttributes(), 
         patchMesh->getAttributes() + patchMesh->getNumberVertices() * patchMesh->getNumberAttributesByVertex() );
     HoleBoundary newIndexArray;
-    HoleBoundary boundaryIndexArray( 
+    HoleBoundary indexArray( 
         patchMesh->getTriangleList(),
         patchMesh->getTriangleList() + patchMesh->getNumTriangles() * 3 );
     
@@ -542,12 +645,13 @@ std::shared_ptr< CornerTable > MeshCompletionApplication::calculateRefinedPatchM
     while( !hasDoneSwaps )
     {
         std::vector< CornerType > verticesToFlip;
+        newIndexArray.clear();
         
-        for( unsigned int iTriangle = 0; iTriangle < boundaryIndexArray.size(); iTriangle += 3 )
+        for( unsigned int iTriangle = 0; iTriangle < indexArray.size(); iTriangle += 3 )
         {
-            CornerType vi = boundaryIndexArray[ iTriangle ];
-            CornerType vj = boundaryIndexArray[ iTriangle + 1 ];
-            CornerType vk = boundaryIndexArray[ iTriangle + 2 ];
+            CornerType vi = indexArray[ iTriangle ];
+            CornerType vj = indexArray[ iTriangle + 1 ];
+            CornerType vk = indexArray[ iTriangle + 2 ];
 
             osg::Vec3 v1( patchMesh->getAttributes()[ 3 * vi ],
                           patchMesh->getAttributes()[ 3 * vi + 1 ],
@@ -562,8 +666,8 @@ std::shared_ptr< CornerTable > MeshCompletionApplication::calculateRefinedPatchM
                           patchMesh->getAttributes()[ 3 * vk + 2 ] );
 
             auto centroid = calculateCentroid( patchMesh, vi, vj, vk );
-            float centroidScaleAttribute = 
-                (scaleAttributes[ iTriangle ] + scaleAttributes[ iTriangle + 1 ] + scaleAttributes[ iTriangle + 2 ]) / 3;
+            double centroidScaleAttribute = 
+                (scaleAttributes[ vi ] + scaleAttributes[ vj ] + scaleAttributes[ vk ]) / 3;
 
             if( densityControl * (centroid - v1).length() > centroidScaleAttribute && densityControl * (centroid - v1).length() > scaleAttributes[ vi ] &&
                 densityControl * (centroid - v2).length() > centroidScaleAttribute && densityControl * (centroid - v2).length() > scaleAttributes[ vj ] &&
@@ -580,9 +684,9 @@ std::shared_ptr< CornerTable > MeshCompletionApplication::calculateRefinedPatchM
                 makeTriangle( c, vj, vk );
                 makeTriangle( vi, c, vk );
                 makeTriangle( vi, vj, c );
-                
-                verticesToFlip.push_back( c );
-                scaleAttributes.push_back( ( scaleAttributes[ vi ] + scaleAttributes[ vj ] + scaleAttributes[ vk ] ) / 3 );
+                                
+                verticesToFlip.push_back( c );                
+                scaleAttributes.push_back( centroidScaleAttribute );
             }
             else
             {
@@ -590,80 +694,67 @@ std::shared_ptr< CornerTable > MeshCompletionApplication::calculateRefinedPatchM
             }
         }
         
-        if( !hadCreatedTriangles )
-            break;
+        /*CornerTable* relaxationTable = new CornerTable( newIndexArray.data(), newVertexArray.data(),
+            newIndexArray.size() / 3, newVertexArray.size() / 3, 3 );*/
         
-        CornerTable* relaxationTable = new CornerTable(newIndexArray.data(), newVertexArray.data(),
-                newIndexArray.size() / 3, newVertexArray.size() / 3, 3);
-
+        TriMesh mesh = createMesh( newVertexArray, newIndexArray );
+            
         for( auto vertex : verticesToFlip )
         {
-            auto neighbourCorners = relaxationTable->getCornerNeighbours(relaxationTable->vertexToCornerIndex(vertex));
-
-            for(auto neighbour : neighbourCorners) {
-                //if( isInCircumSphere )
-                //{
-                relaxationTable->edgeFlip(neighbour);
-                //}
-            }
-        }
-
-        newIndexArray = HoleBoundary(relaxationTable->getTriangleList(),
-                relaxationTable->getTriangleList() + relaxationTable->getNumTriangles() * 3);
-        delete relaxationTable;
-        
-        //int currentSplitIndex = 0;
-        
-        /*for( unsigned int iTriangle = 0; iTriangle < boundaryIndexArray.size(); iTriangle += 3 )
-        {
-            CornerType vi = boundaryIndexArray[ iTriangle ];
-            CornerType vj = boundaryIndexArray[ iTriangle + 1 ];
-            CornerType vk = boundaryIndexArray[ iTriangle + 2 ];
+            TriMesh::VertexHandle v = mesh.vertex_handle( vertex );            
+            TriMesh::VertexFaceIter faceIt = mesh.vf_iter( v );
             
-            if( trianglesToSplit[ currentSplitIndex ].first == iTriangle )
+            for( TriMesh::VertexFaceIter fit = faceIt++; fit != faceIt; fit++ )
             {
-                auto centroid = trianglesToSplit[ currentSplitIndex++ ].second;
+                TriMesh::FaceHandle fh = *fit;                
+                TriMesh::FaceEdgeIter edgeIt = mesh.fe_iter( fh );
                 
-                newVertexArray.push_back( centroid.x() );
-                newVertexArray.push_back( centroid.y() );
-                newVertexArray.push_back( centroid.z() );
-                
-                unsigned int c = newVertexArray.size() / 3;
-                makeTriangle( c, vj, vk );
-                makeTriangle( vi, c, vk );
-                makeTriangle( vi, vj, c );
-                
-                //relax                
-                CornerTable* relaxationTable = new CornerTable( newIndexArray.data(), newVertexArray.data(),
-                        newIndexArray.size() / 3, newVertexArray.size() / 3, 3 );
-
-                auto neighbourCorners = relaxationTable->getCornerNeighbours(relaxationTable->vertexToCornerIndex(c));
-
-                for( auto neighbour : neighbourCorners )
+                for( TriMesh::FaceEdgeIter eit = edgeIt++; eit != edgeIt; eit++ )
                 {
-                    //if( isInCircumSphere )
-                    //{
-                    relaxationTable->edgeFlip(neighbour);
-                    //}
+                    TriMesh::HalfedgeHandle h0 = mesh.halfedge_handle( *eit, 0 );
+                    TriMesh::HalfedgeHandle h1 = mesh.halfedge_handle( *eit, 1 );
+
+                    TriMesh::VertexHandle v0 = mesh.to_vertex_handle( h0 );
+                    TriMesh::VertexHandle v1 = mesh.to_vertex_handle( h1 );
+                    
+                    if( v0 != v && v1 != v )
+                    {
+                        relaxEdge( mesh, *edgeIt );
+                    }
                 }
-                
-                newIndexArray = HoleBoundary( relaxationTable->getTriangleList(), 
-                        relaxationTable->getTriangleList() + relaxationTable->getNumTriangles() * 3 );
-                delete relaxationTable;
             }
-            else
+            
+            /*auto currentCorner = relaxationTable->vertexToCornerIndex( vertex );
+            auto neighbourCorners = relaxationTable->getCornerNeighbours( currentCorner );
+            neighbourCorners.push_back( currentCorner );
+            
+            for( auto neighbour : neighbourCorners ) 
             {
-                makeTriangle( vi, vj, vk );
-            }
-        }*/
+                if( relaxationTable->areEdgeTrianglesInCircumsphere( neighbour ) )
+                {
+                    relaxationTable->edgeFlip( neighbour );
+                }
+            }*/
+        }              
+            
+        /*newVertexArray = std::vector< double >( relaxationTable->getAttributes(),
+            relaxationTable->getAttributes() + relaxationTable->getNumberVertices() * 3 );
+
+        newIndexArray = std::vector< CornerType >( relaxationTable->getTriangleList(),
+            relaxationTable->getTriangleList() + relaxationTable->getNumTriangles() * 3 );*/
         
-        boundaryIndexArray = newIndexArray;
+        //delete relaxationTable;                
         
+        if( !hadCreatedTriangles )
+            break;       
+                    
         do
         {
-            hasDoneSwaps = relaxAllEdges( newVertexArray, newIndexArray );
+            hasDoneSwaps = relaxAllEdges( mesh );
         } 
         while( hasDoneSwaps );
+        
+        indexArray = newIndexArray;
     }
     
     //DONE

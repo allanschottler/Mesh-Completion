@@ -247,7 +247,11 @@ public:
     
     double edgeLength( const CornerType corner );
     
+    void edgeMidpoint( const CornerType corner, double& x, double& y, double& z );
+    
     double getVertexAverageEdgeLength( const CornerType vertex );
+    
+    bool areEdgeTrianglesInCircumsphere( const CornerType corner );
     
     /**
      * Return the number of attributes by vertex.

@@ -6,6 +6,8 @@
 
 #include <iostream>
 #include <stdlib.h>
+#include <assert.h>
+
 using namespace std;
 
 
@@ -140,6 +142,8 @@ bool CornerTable::edgeFlip( const CornerType corner )
     CornerType v = _cornerToVertex[c1];
     CornerType s = _cornerToVertex[c3];
 
+    assert( t!=u && t!=v && t!=s && u!=v && u!=s && v!=s );
+    
     //Change the triangulation.
     _cornerToVertex[c5] = t;
     _cornerToVertex[c2] = s;
@@ -461,6 +465,12 @@ double CornerTable::edgeLength( const CornerType corner )
     int v0 = cornerToVertexIndex( c0 );
     int v1 = cornerToVertexIndex( c1 );
     
+    
+    if( v0 == v1 )
+    {
+        std::cout << "sumfin wrong\n";
+    }
+    
     double Ax = getAttributes()[ _numberCoordinatesByVertex * v0 ];
     double Ay = getAttributes()[ _numberCoordinatesByVertex * v0 + 1 ];
     double Az = getAttributes()[ _numberCoordinatesByVertex * v0 + 2 ];
@@ -469,6 +479,27 @@ double CornerTable::edgeLength( const CornerType corner )
     double Bz = getAttributes()[ _numberCoordinatesByVertex * v1 + 2 ];
     
     return sqrt( (Ax - Bx)*(Ax - Bx) + (Ay - By)*(Ay - By) + (Az - Bz)*(Az - Bz) );
+}
+
+
+
+void CornerTable::edgeMidpoint( const CornerType corner, double& x, double& y, double& z )
+{
+    int c0 = cornerPrevious( corner );
+    int c1 = cornerNext( corner );
+    int v0 = cornerToVertexIndex( c0 );
+    int v1 = cornerToVertexIndex( c1 );
+    
+    double Ax = getAttributes()[ _numberCoordinatesByVertex * v0 ];
+    double Ay = getAttributes()[ _numberCoordinatesByVertex * v0 + 1 ];
+    double Az = getAttributes()[ _numberCoordinatesByVertex * v0 + 2 ];
+    double Bx = getAttributes()[ _numberCoordinatesByVertex * v1 ];
+    double By = getAttributes()[ _numberCoordinatesByVertex * v1 + 1 ];
+    double Bz = getAttributes()[ _numberCoordinatesByVertex * v1 + 2 ];
+    
+    x = (Ax + Bx)/2;
+    y = (Ay + By)/2;
+    z = (Az + Bz)/2;
 }
 
 
@@ -487,6 +518,41 @@ double CornerTable::getVertexAverageEdgeLength( const CornerType vertex )
     }
     
     return average / neighbours.size();
+}
+
+
+
+bool CornerTable::areEdgeTrianglesInCircumsphere( const CornerType corner )
+{
+    CornerType opp = cornerOpposite( corner );
+    
+    if( opp == BORDER_CORNER )
+        return false;
+    
+    double sphereRadius = edgeLength( corner ) / 2;
+    
+    if( sphereRadius == 0. )
+    {
+        std::cout << "sumfin wrong\n";
+    }
+    
+    double x, y, z;
+    edgeMidpoint( corner, x, y, z );
+    
+    CornerType v1 = cornerToVertexIndex( corner );
+    CornerType v2 = cornerToVertexIndex( opp );
+    
+    double x1 = getAttributes()[ 3 * v1 ];
+    double y1 = getAttributes()[ 3 * v1 + 1 ];
+    double z1 = getAttributes()[ 3 * v1 + 2 ];
+    double x2 = getAttributes()[ 3 * v2 ];
+    double y2 = getAttributes()[ 3 * v2 + 1 ];
+    double z2 = getAttributes()[ 3 * v2 + 2 ];
+    
+    double d1 = sqrt( (x1 - x)*(x1 - x) + (y1 - y)*(y1 - y) + (z1 - z)*(z1 - z) );
+    double d2 = sqrt( (x2 - x)*(x2 - x) + (y2 - y)*(y2 - y) + (z2 - z)*(z2 - z) );
+    
+    return d1 <= sphereRadius && d2 <= sphereRadius;
 }
 
 

@@ -14,8 +14,10 @@
 #include "WireframeGeometry.h"
 #include "BoundaryGeometry.h"
 #include <memory>
+#include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
     
 typedef std::vector< CornerType > HoleBoundary;
+typedef OpenMesh::TriMesh_ArrayKernelT<> TriMesh;
 
 class MeshCompletionApplication 
 {
@@ -71,7 +73,11 @@ private:
     
     //void relaxEdge( std::vector< double >& vertexArray, std::vector< CornerType >& indexArray, CornerType corner );
     
-    bool relaxAllEdges( std::vector< double >& vertexArray, HoleBoundary& indexArray );
+    bool isInCircumsphere( TriMesh& mesh, TriMesh::EdgeHandle edge );
+    
+    bool relaxEdge( TriMesh& mesh, TriMesh::EdgeHandle edge );
+    
+    bool relaxAllEdges( TriMesh& mesh );
     
     static MeshCompletionApplication* _instance;
     
