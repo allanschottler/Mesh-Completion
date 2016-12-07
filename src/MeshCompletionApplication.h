@@ -17,7 +17,16 @@
 #include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
     
 typedef std::vector< CornerType > HoleBoundary;
-typedef OpenMesh::TriMesh_ArrayKernelT<> TriMesh;
+
+struct MyTraits : public OpenMesh::DefaultTraits
+{
+    VertexAttributes( OpenMesh::Attributes::Status );
+    FaceAttributes( OpenMesh::Attributes::Status );
+    EdgeAttributes( OpenMesh::Attributes::Status );
+    HalfedgeAttributes( OpenMesh::Attributes::PrevHalfedge );
+};
+
+typedef OpenMesh::TriMesh_ArrayKernelT< MyTraits > TriMesh;
 
 class MeshCompletionApplication 
 {
@@ -59,8 +68,10 @@ public:
     void calculateHoleBoundaries();
     
     HoleBoundary calculateMinimumPatchMesh( HoleBoundary boundary );
+        
+    TriMesh calculateRefinedPatchMesh( std::shared_ptr< CornerTable > patchMesh, HoleBoundary boundary );    
     
-    std::shared_ptr< CornerTable > calculateRefinedPatchMesh( std::shared_ptr< CornerTable > patchMesh, HoleBoundary boundary );
+    std::shared_ptr< CornerTable > calculateFairedPatchMesh( TriMesh& mesh );
     
 private:
     

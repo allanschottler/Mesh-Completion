@@ -95,11 +95,12 @@ void MeshCompletionApplication::buildGeometries()
         auto patchCornerTable = std::make_shared< CornerTable >
             ( indexArray.data(), vertices.data(), indexArray.size() / 3, vertices.size() / 3, 3 );
         
-        auto patchRefinedCornerTable = calculateRefinedPatchMesh( patchCornerTable, boundary );
+        auto refinedMesh = calculateRefinedPatchMesh( patchCornerTable, boundary );
+        auto patchFairedCornerTable = calculateFairedPatchMesh( refinedMesh );
         
         osg::ref_ptr< BoundaryGeometry > boundaryGeometry = new BoundaryGeometry( patchCornerTable ); 
-        osg::ref_ptr< MeshGeometry > patchMeshGeometry = new MeshGeometry( patchRefinedCornerTable ); 
-        osg::ref_ptr< WireframeGeometry > patchWireframGeometry = new WireframeGeometry( patchRefinedCornerTable ); 
+        osg::ref_ptr< MeshGeometry > patchMeshGeometry = new MeshGeometry( patchFairedCornerTable ); 
+        osg::ref_ptr< WireframeGeometry > patchWireframGeometry = new WireframeGeometry( patchFairedCornerTable ); 
 //        osg::ref_ptr< MeshGeometry > patchMeshGeometry = new MeshGeometry( patchCornerTable ); 
 //        osg::ref_ptr< WireframeGeometry > patchWireframGeometry = new WireframeGeometry( patchCornerTable ); 
         
@@ -491,27 +492,42 @@ TriMesh createMesh( std::vector< double >& vertexArray, std::vector< CornerType 
     return mesh;
 }
 
-
-osg::Vec3 MeshCompletionApplication::calculateCentroid( std::shared_ptr< CornerTable > patch, CornerType vi, CornerType vj, CornerType vk )
+    
+TriMesh::VertexHandle splitFace( TriMesh& mesh, TriMesh::FaceHandle f, TriMesh::Point p )
 {
-    osg::Vec3d v1( 
-        patch->getAttributes()[ 3 * vi ], 
-        patch->getAttributes()[ 3 * vi + 1 ], 
-        patch->getAttributes()[ 3 * vi + 2 ] );
-       
-    osg::Vec3d v2( 
-        patch->getAttributes()[ 3 * vj ], 
-        patch->getAttributes()[ 3 * vj + 1 ], 
-        patch->getAttributes()[ 3 * vj + 2 ] );
+    TriMesh::VertexHandle vh = mesh.add_vertex( p );
+    
+    TriMesh::FaceVertexIter vIt = mesh.fv_begin( f );
+    //TriMesh::FaceVertexIter vItEnd = mesh.fv_end( f );
+    
+    TriMesh::VertexHandle vi = *vIt; vIt++;
+    TriMesh::VertexHandle vj = *vIt; vIt++;
+    TriMesh::VertexHandle vk = *vIt; 
         
-    osg::Vec3d v3( 
-        patch->getAttributes()[ 3 * vk ], 
-        patch->getAttributes()[ 3 * vk + 1 ], 
-        patch->getAttributes()[ 3 * vk + 2 ] );
+    std::vector< TriMesh::VertexHandle > vhs;
+    vhs.push_back( vh );
+    vhs.push_back( vj );
+    vhs.push_back( vk );    
+    mesh.triangulate( mesh.add_face( vhs ) );
     
-    return (v1 + v2 + v3) / 3;
+    vhs.clear();
+    vhs.push_back( vi );
+    vhs.push_back( vh );
+    vhs.push_back( vk );    
+    mesh.triangulate( mesh.add_face( vhs ) );
+    
+    vhs.clear();
+    vhs.push_back( vi );
+    vhs.push_back( vj );
+    vhs.push_back( vh );    
+    mesh.triangulate( mesh.add_face( vhs ) );
+    
+    mesh.delete_face( f, false );
+    //esh.garbage_collection( false, false, true );
+    
+    return vh;
 }
-    
+
 bool MeshCompletionApplication::isInCircumsphere( TriMesh& mesh, TriMesh::EdgeHandle edge )
 {        
     TriMesh::HalfedgeHandle he1 = mesh.halfedge_handle( edge, 0 );
@@ -578,8 +594,8 @@ bool MeshCompletionApplication::isInCircumsphere( TriMesh& mesh, TriMesh::EdgeHa
     midpoint +=  mesh.point( mesh.to_vertex_handle( he2 ) );    
     midpoint *= 0.5;
     
-    double l1 = (p3 - midpoint).length(); 
-    double l2 = (p4 - midpoint).length(); 
+    double l1 = (p3 - midpoint).norm(); 
+    double l2 = (p4 - midpoint).norm(); 
           
     return ( l1 <= radius && l2 <= radius );
 }
@@ -605,14 +621,14 @@ bool MeshCompletionApplication::relaxAllEdges( TriMesh& mesh )
         
     for( TriMesh::EdgeIter it = mesh.edges_begin(); it != mesh.edges_end(); ++it ) 
     {
-        if( relaxEdge( mesh, it.handle() ) )
+        if( relaxEdge( mesh, *it ) )
             hasRelaxed = true;
     }
     
     return hasRelaxed;
 }
     
-std::shared_ptr< CornerTable > MeshCompletionApplication::calculateRefinedPatchMesh( std::shared_ptr< CornerTable > patchMesh, HoleBoundary boundary )
+TriMesh MeshCompletionApplication::calculateRefinedPatchMesh( std::shared_ptr< CornerTable > patchMesh, HoleBoundary boundary )
 {        
     auto densityControl = M_SQRT2;
     
@@ -624,140 +640,189 @@ std::shared_ptr< CornerTable > MeshCompletionApplication::calculateRefinedPatchM
     HoleBoundary indexArray( 
         patchMesh->getTriangleList(),
         patchMesh->getTriangleList() + patchMesh->getNumTriangles() * 3 );
-    
+        
     // Calcula averages
     for( auto iVertex : boundary )
     {
-        double average = _cornerTable->getVertexAverageEdgeLength( iVertex );
+        double average = _cornerTable->getVertexAverageEdgeLength( iVertex ) * 1;
         scaleAttributes.push_back( average );
-    }
+    }    
     
-    bool hadCreatedTriangles = false;
     bool hasDoneSwaps = false;
-    
-    auto makeTriangle = [ & ]( CornerType i, CornerType j, CornerType k )
-    {
-        newIndexArray.push_back( i );
-        newIndexArray.push_back( j );
-        newIndexArray.push_back( k );
-    };
+        
+    TriMesh mesh = createMesh( newVertexArray, indexArray );
     
     while( !hasDoneSwaps )
     {
-        std::vector< CornerType > verticesToFlip;
-        newIndexArray.clear();
+        bool hadCreatedTriangles = false;
         
-        for( unsigned int iTriangle = 0; iTriangle < indexArray.size(); iTriangle += 3 )
-        {
-            CornerType vi = indexArray[ iTriangle ];
-            CornerType vj = indexArray[ iTriangle + 1 ];
-            CornerType vk = indexArray[ iTriangle + 2 ];
-
-            osg::Vec3 v1( patchMesh->getAttributes()[ 3 * vi ],
-                          patchMesh->getAttributes()[ 3 * vi + 1 ],
-                          patchMesh->getAttributes()[ 3 * vi + 2 ] );
+        std::set< TriMesh::EdgeHandle > edgesToFlip;
+        /*newIndexArray.clear();*/
+        TriMesh::FaceIter triangleIt = mesh.faces_begin();
+        
+        for( ; triangleIt != mesh.faces_end(); )
+        {            
+            TriMesh::Point centroid = mesh.calc_face_centroid( *triangleIt );
+            double centroidScaleAttribute = 0.;
+            //auto centroid = calculateCentroid( patchMesh, vi, vj, vk );
             
-            osg::Vec3 v2( patchMesh->getAttributes()[ 3 * vj ],
-                          patchMesh->getAttributes()[ 3 * vj + 1 ],
-                          patchMesh->getAttributes()[ 3 * vj + 2 ] );
+            TriMesh::FaceVertexIter vertexIt = mesh.fv_iter( *triangleIt );
+            TriMesh::VertexHandle vh1 = *vertexIt; vertexIt++;
+            TriMesh::VertexHandle vh2 = *vertexIt; vertexIt++;
+            TriMesh::VertexHandle vh3 = *vertexIt;
+           
+            TriMesh::Point p1 = mesh.point( vh1 );
+            TriMesh::Point p2 = mesh.point( vh2 );
+            TriMesh::Point p3 = mesh.point( vh3 );
+                         
+            centroidScaleAttribute = ( scaleAttributes[ vh1.idx() ] + scaleAttributes[ vh2.idx() ] + scaleAttributes[ vh3.idx() ] ) / 3.;
+
+            double l1 = densityControl * (centroid - p1).norm();
+            double l2 = densityControl * (centroid - p2).norm();
+            double l3 = densityControl * (centroid - p3).norm();
             
-            osg::Vec3 v3( patchMesh->getAttributes()[ 3 * vk ],
-                          patchMesh->getAttributes()[ 3 * vk + 1 ],
-                          patchMesh->getAttributes()[ 3 * vk + 2 ] );
-
-            auto centroid = calculateCentroid( patchMesh, vi, vj, vk );
-            double centroidScaleAttribute = 
-                (scaleAttributes[ vi ] + scaleAttributes[ vj ] + scaleAttributes[ vk ]) / 3;
-
-            if( densityControl * (centroid - v1).length() > centroidScaleAttribute && densityControl * (centroid - v1).length() > scaleAttributes[ vi ] &&
-                densityControl * (centroid - v2).length() > centroidScaleAttribute && densityControl * (centroid - v2).length() > scaleAttributes[ vj ] &&
-                densityControl * (centroid - v3).length() > centroidScaleAttribute && densityControl * (centroid - v3).length() > scaleAttributes[ vk ] )
+            if( l1 > centroidScaleAttribute && l1 > scaleAttributes[ vh1.idx() ] &&
+                l2 > centroidScaleAttribute && l2 > scaleAttributes[ vh2.idx() ] &&
+                l3 > centroidScaleAttribute && l3 > scaleAttributes[ vh3.idx() ] )
             {
                 hadCreatedTriangles = true;                
-                //trianglesToSplit.push_back( std::make_pair( iTriangle, centroid ) );
-                                
-                newVertexArray.push_back( centroid.x() );
-                newVertexArray.push_back( centroid.y() );
-                newVertexArray.push_back( centroid.z() );
                 
-                unsigned int c = newVertexArray.size() / 3 - 1;
-                makeTriangle( c, vj, vk );
-                makeTriangle( vi, c, vk );
-                makeTriangle( vi, vj, c );
-                                
-                verticesToFlip.push_back( c );                
                 scaleAttributes.push_back( centroidScaleAttribute );
+            
+                // Relax
+                TriMesh::VertexHandle centroidHandle = mesh.split( *triangleIt, centroid ); //splitFace( mesh, *triangleIt, centroid );                      
+                                    
+                std::cout << "centroid: " << centroidHandle.idx() << "\n";
+                
+                TriMesh::VertexFaceIter faceStartIt = mesh.vf_begin( centroidHandle );
+                //TriMesh::VertexFaceIter faceEndIt = mesh.vf_end( centroidHandle );
+                TriMesh::VertexFaceIter faceIt = faceStartIt; //faceIt++;
+
+                // Para cada face do centroide
+                for( ; faceIt.is_valid(); ++faceIt )
+                {      
+                    TriMesh::FaceVertexIter vIt = mesh.fv_begin( *faceIt );
+
+                    TriMesh::VertexHandle v1 = *vIt; vIt++;
+                    TriMesh::VertexHandle v2 = *vIt; vIt++;
+                    TriMesh::VertexHandle v3 = *vIt; 
+
+                    std::cout << "indexes: " << v1.idx() << " " << v2.idx() << " " << v3.idx() << "\n";
+
+                    /**********************************************************************/
+                    TriMesh::FaceEdgeIter edgeStartIt = mesh.fe_begin( *faceIt );
+                    //TriMesh::FaceEdgeIter edgeEndIt = mesh.fe_end( *faceIt );
+                    TriMesh::FaceEdgeIter edgeIt = edgeStartIt; //edgeIt++;
+
+                    // Para cada aresta da face
+                    for( ; edgeIt.is_valid(); ++edgeIt )
+                    {
+                        TriMesh::HalfedgeHandle h0 = mesh.halfedge_handle( *edgeIt, 0 );
+                        TriMesh::HalfedgeHandle h1 = mesh.halfedge_handle( *edgeIt, 1 );
+
+                        TriMesh::VertexHandle v0 = mesh.to_vertex_handle( h0 );
+                        TriMesh::VertexHandle v1 = mesh.to_vertex_handle( h1 );
+
+                        // Se for aresta nãp-adjacente ao centroide
+                        if( v0.idx() != centroidHandle.idx() && v1.idx() != centroidHandle.idx() )
+                        {
+                            edgesToFlip.insert( *edgeIt );                            
+                        }
+                    }
+                } 
             }
             else
             {
-                makeTriangle( vi, vj, vk );
+                ++triangleIt;
             }
         }
         
-        /*CornerTable* relaxationTable = new CornerTable( newIndexArray.data(), newVertexArray.data(),
-            newIndexArray.size() / 3, newVertexArray.size() / 3, 3 );*/
-        
-        TriMesh mesh = createMesh( newVertexArray, newIndexArray );
-            
-        for( auto vertex : verticesToFlip )
-        {
-            TriMesh::VertexHandle v = mesh.vertex_handle( vertex );            
-            TriMesh::VertexFaceIter faceIt = mesh.vf_iter( v );
-            
-            for( TriMesh::VertexFaceIter fit = faceIt++; fit != faceIt; fit++ )
-            {
-                TriMesh::FaceHandle fh = *fit;                
-                TriMesh::FaceEdgeIter edgeIt = mesh.fe_iter( fh );
-                
-                for( TriMesh::FaceEdgeIter eit = edgeIt++; eit != edgeIt; eit++ )
-                {
-                    TriMesh::HalfedgeHandle h0 = mesh.halfedge_handle( *eit, 0 );
-                    TriMesh::HalfedgeHandle h1 = mesh.halfedge_handle( *eit, 1 );
-
-                    TriMesh::VertexHandle v0 = mesh.to_vertex_handle( h0 );
-                    TriMesh::VertexHandle v1 = mesh.to_vertex_handle( h1 );
-                    
-                    if( v0 != v && v1 != v )
-                    {
-                        relaxEdge( mesh, *edgeIt );
-                    }
-                }
-            }
-            
-            /*auto currentCorner = relaxationTable->vertexToCornerIndex( vertex );
-            auto neighbourCorners = relaxationTable->getCornerNeighbours( currentCorner );
-            neighbourCorners.push_back( currentCorner );
-            
-            for( auto neighbour : neighbourCorners ) 
-            {
-                if( relaxationTable->areEdgeTrianglesInCircumsphere( neighbour ) )
-                {
-                    relaxationTable->edgeFlip( neighbour );
-                }
-            }*/
-        }              
-            
-        /*newVertexArray = std::vector< double >( relaxationTable->getAttributes(),
-            relaxationTable->getAttributes() + relaxationTable->getNumberVertices() * 3 );
-
-        newIndexArray = std::vector< CornerType >( relaxationTable->getTriangleList(),
-            relaxationTable->getTriangleList() + relaxationTable->getNumTriangles() * 3 );*/
-        
-        //delete relaxationTable;                
+        for( auto edgeHandle : edgesToFlip )
+        { 
+            if( relaxEdge( mesh, edgeHandle ) )
+                std::cout << "flipped\n";
+        }
         
         if( !hadCreatedTriangles )
             break;       
                     
+        int i = 0;
+        
         do
         {
             hasDoneSwaps = relaxAllEdges( mesh );
+            i++;
         } 
-        while( hasDoneSwaps );
-        
-        indexArray = newIndexArray;
+        while( hasDoneSwaps );// && i < 100 );
+        //indexArray = newIndexArray;
     }
     
+    return mesh;
+}
+
+
+std::shared_ptr< CornerTable > MeshCompletionApplication::calculateFairedPatchMesh( TriMesh& mesh )
+{
+    std::vector< double > edgeWeights;    
+    TriMesh::EdgeIter edgeIt = mesh.edges_begin();
+    
+    for( ; edgeIt != mesh.edges_end(); ++edgeIt )
+    {
+        edgeWeights.push_back( 1. / mesh.calc_edge_length( *edgeIt ) );
+    }
+    
+    // Fairing
+    TriMesh::VertexIter vertexIt = mesh.vertices_begin();
+    
+    for( ; vertexIt != mesh.vertices_end(); ++vertexIt )
+    {
+        if( mesh.is_boundary( *vertexIt ) )
+            continue;
+        
+        double vertexWeight = 0.;
+        TriMesh::Point avgPoint( 0., 0., 0. );
+        TriMesh::VertexEdgeIter veIt = mesh.ve_begin( *vertexIt );
+        
+        for( ; veIt.is_valid(); ++veIt )
+        {
+            TriMesh::HalfedgeHandle h0 = mesh.halfedge_handle( *veIt, 0 );
+            TriMesh::HalfedgeHandle h1 = mesh.halfedge_handle( *veIt, 1 );
+
+            TriMesh::VertexHandle v0 = mesh.to_vertex_handle( h0 );
+            TriMesh::VertexHandle v1 = mesh.to_vertex_handle( h1 );
+                        
+            vertexWeight += edgeWeights[ veIt->idx() ];
+            avgPoint += edgeWeights[ veIt->idx() ] * ( ( v0 == *vertexIt ) ? mesh.point( v1 ) : mesh.point( v0 ) );
+        }
+        
+        TriMesh::Point v = mesh.point( *vertexIt );
+        TriMesh::Point u = -v + ( avgPoint / vertexWeight );
+        TriMesh::Point u2 = -u + ( ( avgPoint * u ) / vertexWeight );
+        mesh.set_point( *vertexIt, v + u );
+    }
+    
+    // Build corner table for render
+    std::vector< double > vertexArray;
+    std::vector< CornerType > indexArray;
+    
+    for( TriMesh::VertexIter vIt = mesh.vertices_begin(); vIt != mesh.vertices_end(); ++vIt )
+    {
+        auto point = mesh.point( *vIt );
+        vertexArray.push_back( point[ 0 ] );
+        vertexArray.push_back( point[ 1 ] );
+        vertexArray.push_back( point[ 2 ] );
+    }
+    
+    for( TriMesh::FaceIter fIt = mesh.faces_begin(); fIt != mesh.faces_end(); ++fIt )
+    {
+        TriMesh::ConstFaceVertexIter fvIt = mesh.cfv_iter( *fIt );
+        
+        indexArray.push_back( fvIt->idx() ); fvIt++;
+        indexArray.push_back( fvIt->idx() ); fvIt++;
+        indexArray.push_back( fvIt->idx() );
+    }
+        
     //DONE
-    return std::make_shared< CornerTable >( newIndexArray.data(), newVertexArray.data(),
-                        newIndexArray.size() / 3, newVertexArray.size() / 3, 3 );
+    return std::make_shared< CornerTable >( indexArray.data(), vertexArray.data(),
+                        indexArray.size() / 3, vertexArray.size() / 3, 3 );
 }
