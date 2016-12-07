@@ -21,7 +21,7 @@ typedef std::vector< CornerType > HoleBoundary;
 struct MyTraits : public OpenMesh::DefaultTraits
 {
     VertexAttributes( OpenMesh::Attributes::Status );
-    FaceAttributes( OpenMesh::Attributes::Status );
+    FaceAttributes( OpenMesh::Attributes::Status | OpenMesh::Attributes::Normal );
     EdgeAttributes( OpenMesh::Attributes::Status );
     HalfedgeAttributes( OpenMesh::Attributes::PrevHalfedge );
 };
@@ -55,6 +55,14 @@ public:
         }
     };
     
+    enum FairingMode
+    {
+        NONE = 0,
+        SCALAR,
+        HARMONIC,
+        SECOND_ORDER
+    };
+    
     virtual ~MeshCompletionApplication();
     
     static MeshCompletionApplication* getInstance();
@@ -72,6 +80,8 @@ public:
     TriMesh calculateRefinedPatchMesh( std::shared_ptr< CornerTable > patchMesh, HoleBoundary boundary );    
     
     std::shared_ptr< CornerTable > calculateFairedPatchMesh( TriMesh& mesh );
+    
+    void setFairingMode( FairingMode mode );
     
 private:
     
@@ -112,6 +122,8 @@ private:
     bool _isWireframeEnabled;
     
     std::vector< HoleBoundary > _boundaries;
+    
+    FairingMode _fairingMode;
 };
 
 #endif /* MESHCOMPLETIONAPPLICATION_H */

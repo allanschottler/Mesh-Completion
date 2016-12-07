@@ -44,6 +44,12 @@ MainWindow::MainWindow( std::string title ) :
     _lightingCheckButton = GTK_WIDGET( gtk_builder_get_object( builder, "checkmenuitem2" ) );
     _wireframeCheckButton = GTK_WIDGET( gtk_builder_get_object( builder, "checkmenuitem1" ) );
     
+    _noFairingButton = GTK_WIDGET( gtk_builder_get_object( builder, "radiomenuitem1" ) );
+    _scaleFairingButton = GTK_WIDGET( gtk_builder_get_object( builder, "radiomenuitem2" ) );
+    _harmonicFairingButton = GTK_WIDGET( gtk_builder_get_object( builder, "radiomenuitem3" ) );
+    _secondOrderFairingButton = GTK_WIDGET( gtk_builder_get_object( builder, "radiomenuitem4" ) );
+    
+    
     // Signals
     g_timeout_add( 15, (GSourceFunc)( &MainWindow::onIdle ), this );
     
@@ -55,6 +61,11 @@ MainWindow::MainWindow( std::string title ) :
     g_signal_connect( G_OBJECT( _aboutButton ), "activate", G_CALLBACK( &MainWindow::onAboutButtonClicked ), _dialog );
     g_signal_connect( G_OBJECT( _lightingCheckButton ), "toggled", G_CALLBACK( &MainWindow::onLightingButtonClicked ), _dialog );
     g_signal_connect( G_OBJECT( _wireframeCheckButton ), "toggled", G_CALLBACK( &MainWindow::onWireframeButtonClicked ), _dialog );
+    
+    g_signal_connect( G_OBJECT( _noFairingButton ), "activate", G_CALLBACK( &MainWindow::onFairingModeButtonClicked ), _dialog );
+    g_signal_connect( G_OBJECT( _scaleFairingButton ), "activate", G_CALLBACK( &MainWindow::onFairingModeButtonClicked ), _dialog );
+    g_signal_connect( G_OBJECT( _harmonicFairingButton ), "activate", G_CALLBACK( &MainWindow::onFairingModeButtonClicked ), _dialog );
+    g_signal_connect( G_OBJECT( _secondOrderFairingButton ), "activate", G_CALLBACK( &MainWindow::onFairingModeButtonClicked ), _dialog );
     
     g_object_set_data( ( GObject* ) _dialog, "THIS", ( gpointer )this );
 }
@@ -98,7 +109,7 @@ gboolean MainWindow::onOpenButtonClicked( GtkWidget* button, gpointer pointer )
     if( result == NULL )
         return FALSE;
     
-    MainWindow* dialog = reinterpret_cast< MainWindow* >( result );
+    //MainWindow* dialog = reinterpret_cast< MainWindow* >( result );
     
     MeshCompletionApplication::getInstance()->openFile( "/home/v/allanws/Pessoais/Mestrado/GMP/Trab1/data/bunny_hole.off" );
             
@@ -193,6 +204,31 @@ gboolean MainWindow::onWireframeButtonClicked( GtkWidget* button, gpointer point
     bool isChecked = gtk_check_menu_item_get_active( GTK_CHECK_MENU_ITEM( dialog->_wireframeCheckButton ) );
     
     MeshCompletionApplication::getInstance()->setWireframeEnabled( isChecked );
+    
+    return TRUE;
+}
+
+gboolean MainWindow::onFairingModeButtonClicked( GtkWidget* button, gpointer pointer )
+{
+    gpointer result = g_object_get_data( ( GObject* ) pointer, "THIS" );
+    
+    if( result == NULL )
+        return FALSE;
+    
+    MainWindow* dialog = reinterpret_cast< MainWindow* >( result );
+    
+    MeshCompletionApplication::FairingMode mode;
+    
+    if( button == dialog->_scaleFairingButton )
+        mode = MeshCompletionApplication::SCALAR;
+    else if( button == dialog->_harmonicFairingButton )
+        mode = MeshCompletionApplication::HARMONIC;
+    else if( button == dialog->_secondOrderFairingButton )
+        mode = MeshCompletionApplication::SECOND_ORDER;
+    else
+        mode = MeshCompletionApplication::NONE;
+    
+    MeshCompletionApplication::getInstance()->setFairingMode( mode );
     
     return TRUE;
 }

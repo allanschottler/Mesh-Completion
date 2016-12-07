@@ -36,6 +36,7 @@ private:
     static gboolean onWireframeButtonClicked( GtkWidget* button, gpointer pointer );
     static gboolean onQuitButtonClicked( GtkWidget* button, gpointer pointer );
     static gboolean onAboutButtonClicked( GtkWidget* button, gpointer pointer );
+    static gboolean onFairingModeButtonClicked( GtkWidget* button, gpointer pointer );
     
     std::string _title;
     
@@ -50,7 +51,12 @@ private:
     GtkWidget* _wireframeCheckButton;
     GtkWidget* _quitButton;
     GtkWidget* _aboutButton;
-
+    
+    //Fairing
+    GtkWidget* _noFairingButton;
+    GtkWidget* _scaleFairingButton;
+    GtkWidget* _harmonicFairingButton;
+    GtkWidget* _secondOrderFairingButton;
 };
 
 #endif /* MAINWINDOW_H */

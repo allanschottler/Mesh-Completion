@@ -21,6 +21,7 @@
 #include <queue>
 #include <functional>
 #include <math.h>
+#include <complex>
 
 MeshCompletionApplication* MeshCompletionApplication::_instance = 0;
 
@@ -45,6 +46,8 @@ MeshCompletionApplication::MeshCompletionApplication() :
     osg::Vec3d eye, center, up, newEye( 0.0f, 5.0f, 5.0f );
     manipulator->getHomePosition( eye, center, up );    
     manipulator->setHomePosition( newEye, center, up );    
+    
+    setFairingMode( SCALAR );
     
     _window->getCanvas().setCameraManipulator( manipulator );
     _window->getCanvas().setSceneData( _scene );
@@ -763,42 +766,88 @@ TriMesh MeshCompletionApplication::calculateRefinedPatchMesh( std::shared_ptr< C
 
 std::shared_ptr< CornerTable > MeshCompletionApplication::calculateFairedPatchMesh( TriMesh& mesh )
 {
-    std::vector< double > edgeWeights;    
-    TriMesh::EdgeIter edgeIt = mesh.edges_begin();
-    
-    for( ; edgeIt != mesh.edges_end(); ++edgeIt )
+    if( _fairingMode != NONE )
     {
-        edgeWeights.push_back( 1. / mesh.calc_edge_length( *edgeIt ) );
-    }
-    
-    // Fairing
-    TriMesh::VertexIter vertexIt = mesh.vertices_begin();
-    
-    for( ; vertexIt != mesh.vertices_end(); ++vertexIt )
-    {
-        if( mesh.is_boundary( *vertexIt ) )
-            continue;
-        
-        double vertexWeight = 0.;
-        TriMesh::Point avgPoint( 0., 0., 0. );
-        TriMesh::VertexEdgeIter veIt = mesh.ve_begin( *vertexIt );
-        
-        for( ; veIt.is_valid(); ++veIt )
-        {
-            TriMesh::HalfedgeHandle h0 = mesh.halfedge_handle( *veIt, 0 );
-            TriMesh::HalfedgeHandle h1 = mesh.halfedge_handle( *veIt, 1 );
+        std::vector< double > edgeWeights;    
+        TriMesh::EdgeIter edgeIt = mesh.edges_begin();
 
-            TriMesh::VertexHandle v0 = mesh.to_vertex_handle( h0 );
-            TriMesh::VertexHandle v1 = mesh.to_vertex_handle( h1 );
-                        
-            vertexWeight += edgeWeights[ veIt->idx() ];
-            avgPoint += edgeWeights[ veIt->idx() ] * ( ( v0 == *vertexIt ) ? mesh.point( v1 ) : mesh.point( v0 ) );
+        for( ; edgeIt != mesh.edges_end(); ++edgeIt )
+        {
+            /*if( mesh.is_boundary( *edgeIt ) )
+                continue;*/
+            
+            if( _fairingMode == SCALAR )
+            {
+                edgeWeights.push_back( 1. / mesh.calc_edge_length( *edgeIt ) );            
+            }
+            else if( _fairingMode == HARMONIC )
+            {
+                TriMesh::HalfedgeHandle h0 = mesh.halfedge_handle( *edgeIt, 0 );
+                TriMesh::HalfedgeHandle h1 = mesh.halfedge_handle( *edgeIt, 1 );
+                
+                TriMesh::HalfedgeHandle h00 = mesh.prev_halfedge_handle( h0 );
+                TriMesh::HalfedgeHandle h01 = mesh.next_halfedge_handle( h0 );
+                
+                TriMesh::HalfedgeHandle h10 = mesh.prev_halfedge_handle( h1 );
+                TriMesh::HalfedgeHandle h11 = mesh.next_halfedge_handle( h1 );
+                
+                TriMesh::Normal n00 = mesh.calc_edge_vector( h00 );
+                TriMesh::Normal n01 = mesh.calc_edge_vector( h01 );
+                double a0 = std::acos( OpenMesh::dot( n00, n01 ) );
+                
+                TriMesh::Normal n10 = mesh.calc_edge_vector( h10 );
+                TriMesh::Normal n11 = mesh.calc_edge_vector( h11 );
+                double a1 = std::acos( OpenMesh::dot( n10, n11 ) );
+                
+//                TriMesh::FaceHandle f0 = mesh.face_handle( h0 );
+//                TriMesh::FaceHandle f1 = mesh.face_handle( h1 );
+//                
+//                TriMesh::Normal nRef( 0., 1., 0. );
+//                TriMesh::Normal n0 = mesh.calc_face_normal( f0 );
+//                TriMesh::Normal n1 = mesh.calc_face_normal( f1 );
+//                
+//                double a0 = std::acos( OpenMesh::dot( nRef, n0 ) );
+//                double a1 = std::acos( OpenMesh::dot( nRef, n1 ) );
+                
+                double weight = ( 1. / std::tan( a0 ) ) + ( 1. / std::tan( a1 ) );
+                
+                edgeWeights.push_back( weight );
+            }
         }
-        
-        TriMesh::Point v = mesh.point( *vertexIt );
-        TriMesh::Point u = -v + ( avgPoint / vertexWeight );
-        TriMesh::Point u2 = -u + ( ( avgPoint * u ) / vertexWeight );
-        mesh.set_point( *vertexIt, v + u );
+
+        // Fairing
+        TriMesh::VertexIter vertexIt = mesh.vertices_begin();
+
+        for( ; vertexIt != mesh.vertices_end(); ++vertexIt )
+        {
+            if( mesh.is_boundary( *vertexIt ) )
+                continue;
+
+            double vertexWeight = 0.;
+            TriMesh::Point avgPoint( 0., 0., 0. );
+            TriMesh::VertexEdgeIter veIt = mesh.ve_begin( *vertexIt );
+
+            for( ; veIt.is_valid(); ++veIt )
+            {
+                TriMesh::HalfedgeHandle h0 = mesh.halfedge_handle( *veIt, 0 );
+                TriMesh::HalfedgeHandle h1 = mesh.halfedge_handle( *veIt, 1 );
+
+                TriMesh::VertexHandle v0 = mesh.to_vertex_handle( h0 );
+                TriMesh::VertexHandle v1 = mesh.to_vertex_handle( h1 );
+
+                vertexWeight += edgeWeights[ veIt->idx() ];
+                avgPoint += edgeWeights[ veIt->idx() ] * ( ( v0.idx() == vertexIt->idx() ) ? mesh.point( v1 ) : mesh.point( v0 ) );
+            }
+
+            TriMesh::Point v = mesh.point( *vertexIt );
+            TriMesh::Point u = -v + ( avgPoint / vertexWeight );
+            //TriMesh::Point u2 = -u + ( ( avgPoint * u ) / vertexWeight );
+            
+            /*if( _fairingMode == SECOND_ORDER )
+                mesh.set_point( *vertexIt, v + u2 );
+            else*/
+                mesh.set_point( *vertexIt, v + u );
+        }
     }
     
     // Build corner table for render
@@ -825,4 +874,19 @@ std::shared_ptr< CornerTable > MeshCompletionApplication::calculateFairedPatchMe
     //DONE
     return std::make_shared< CornerTable >( indexArray.data(), vertexArray.data(),
                         indexArray.size() / 3, vertexArray.size() / 3, 3 );
+}
+
+void MeshCompletionApplication::setFairingMode( FairingMode mode )
+{
+    _fairingMode = mode;
+    
+    if( _cornerTable )
+    {
+        _rootGeode->removeDrawables( 0, _rootGeode->getNumDrawables() );
+        //_scene->removeChildren( 0, _scene->getNumChildren() );
+        
+        calculateHoleBoundaries();
+        
+        buildGeometries();
+    }
 }
