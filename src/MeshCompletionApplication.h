@@ -14,19 +14,9 @@
 #include "WireframeGeometry.h"
 #include "BoundaryGeometry.h"
 #include <memory>
-#include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
+#include "TriMesh.h"
     
 typedef std::vector< CornerType > HoleBoundary;
-
-struct MyTraits : public OpenMesh::DefaultTraits
-{
-    VertexAttributes( OpenMesh::Attributes::Status );
-    FaceAttributes( OpenMesh::Attributes::Status | OpenMesh::Attributes::Normal );
-    EdgeAttributes( OpenMesh::Attributes::Status );
-    HalfedgeAttributes( OpenMesh::Attributes::PrevHalfedge );
-};
-
-typedef OpenMesh::TriMesh_ArrayKernelT< MyTraits > TriMesh;
 
 class MeshCompletionApplication 
 {
@@ -51,7 +41,8 @@ public:
         
         inline bool operator<( const DihedralAngleWeight& rdaw )
         {
-            return ( this->angle < rdaw.angle ) || ( ( this->angle == rdaw.angle ) && ( this->area < rdaw.area ) );
+            //return ( this->angle < rdaw.angle ) || ( ( this->angle == rdaw.angle ) && ( this->area < rdaw.area ) );
+            return ( this->area < rdaw.area );
         }
     };
     

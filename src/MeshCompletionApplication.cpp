@@ -435,7 +435,7 @@ HoleBoundary MeshCompletionApplication::calculateMinimumPatchMesh( HoleBoundary 
                     minIndex = m;
                 }
             }
-            
+             
             weightSet[ std::make_tuple( i, k ) ] = std::make_tuple( minIndex, minWeight );
         }
     }        
@@ -493,42 +493,6 @@ TriMesh createMesh( std::vector< double >& vertexArray, std::vector< CornerType 
     }
     
     return mesh;
-}
-
-    
-TriMesh::VertexHandle splitFace( TriMesh& mesh, TriMesh::FaceHandle f, TriMesh::Point p )
-{
-    TriMesh::VertexHandle vh = mesh.add_vertex( p );
-    
-    TriMesh::FaceVertexIter vIt = mesh.fv_begin( f );
-    //TriMesh::FaceVertexIter vItEnd = mesh.fv_end( f );
-    
-    TriMesh::VertexHandle vi = *vIt; vIt++;
-    TriMesh::VertexHandle vj = *vIt; vIt++;
-    TriMesh::VertexHandle vk = *vIt; 
-        
-    std::vector< TriMesh::VertexHandle > vhs;
-    vhs.push_back( vh );
-    vhs.push_back( vj );
-    vhs.push_back( vk );    
-    mesh.triangulate( mesh.add_face( vhs ) );
-    
-    vhs.clear();
-    vhs.push_back( vi );
-    vhs.push_back( vh );
-    vhs.push_back( vk );    
-    mesh.triangulate( mesh.add_face( vhs ) );
-    
-    vhs.clear();
-    vhs.push_back( vi );
-    vhs.push_back( vj );
-    vhs.push_back( vh );    
-    mesh.triangulate( mesh.add_face( vhs ) );
-    
-    mesh.delete_face( f, false );
-    //esh.garbage_collection( false, false, true );
-    
-    return vh;
 }
 
 bool MeshCompletionApplication::isInCircumsphere( TriMesh& mesh, TriMesh::EdgeHandle edge )
@@ -862,17 +826,9 @@ std::shared_ptr< CornerTable > MeshCompletionApplication::calculateFairedPatchMe
     {
         auto point = mesh.point( *vIt );
         
-        try {
         vertexArray.push_back( point[ 0 ] );
         vertexArray.push_back( point[ 1 ] );
         vertexArray.push_back( point[ 2 ] );
-        } catch (const std::exception& ex) {
-            std::cout << "ex" << "\n";
-        } catch (const std::string& ex) {
-            std::cout << ex << "\n";
-        } catch (...) {
-            std::cout << "ex" << "\n";
-        } 
     }
     
     for( TriMesh::FaceIter fIt = mesh.faces_begin(); fIt != mesh.faces_end(); ++fIt )
@@ -883,17 +839,9 @@ std::shared_ptr< CornerTable > MeshCompletionApplication::calculateFairedPatchMe
         int i1 = fvIt->idx(); fvIt++;
         int i2 = fvIt->idx();
         
-        try { 
         indexArray.push_back( i0 );
         indexArray.push_back( i1 );
         indexArray.push_back( i2 );
-        } catch (const std::exception& ex) {
-            std::cout << "ex" << "\n";
-        } catch (const std::string& ex) {
-            std::cout << ex << "\n";
-        } catch (...) {
-            std::cout << "ex" << "\n";
-        } 
     }
         
     //DONE
