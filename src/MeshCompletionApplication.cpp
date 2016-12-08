@@ -28,18 +28,24 @@ MeshCompletionApplication* MeshCompletionApplication::_instance = 0;
 MeshCompletionApplication::MeshCompletionApplication() :
     _window( new MainWindow( "[GMP] Trabalho 1" ) ),
     _cornerTable( nullptr ),
-    _isWireframeEnabled( false )
+    _isWireframeEnabled( false ),
+    _isBoundariesEnabled( true )
 {
     srand( time( NULL ) );    
             
     _scene = new osg::Group;
-    _rootGeode = new osg::Geode;
+    _meshesGeode = new osg::Geode;
+    _wireframesGeode = new osg::Geode;
+    _boundariesGeode = new osg::Geode;
     
-    _scene->addChild( _rootGeode );
+    _scene->addChild( _meshesGeode );
+    _scene->addChild( _wireframesGeode );
+    _scene->addChild( _boundariesGeode );
     
     osg::ref_ptr< osg::LineWidth > linewidth = new osg::LineWidth( 2.0f );
-    _rootGeode->getOrCreateStateSet()->setAttributeAndModes( linewidth, osg::StateAttribute::ON );         
-    _rootGeode->getOrCreateStateSet()->setMode( GL_LIGHTING, osg::StateAttribute::ON );
+    _wireframesGeode->getOrCreateStateSet()->setAttributeAndModes( linewidth, osg::StateAttribute::ON );         
+    _wireframesGeode->getOrCreateStateSet()->setMode( GL_LIGHTING, osg::StateAttribute::OFF );
+    _meshesGeode->getOrCreateStateSet()->setMode( GL_LIGHTING, osg::StateAttribute::ON );
         
     osg::ref_ptr< osgGA::TrackballManipulator > manipulator = new osgGA::TrackballManipulator();
     
@@ -71,13 +77,20 @@ MeshCompletionApplication* MeshCompletionApplication::getInstance()
 }
 
 
-void MeshCompletionApplication::buildGeometries()
-{
+void MeshCompletionApplication::buildMesh()
+{    
     _meshGeometry = new MeshGeometry( _cornerTable );   
-    _wireframeGeometry = new WireframeGeometry( _cornerTable );  
+    _wireframeGeometry = new WireframeGeometry( _cornerTable ); 
+        
+    _meshesGeode->addDrawable( _meshGeometry );   
     
-    _boundariesGeode = new osg::Geode;
-    
+    if( _isWireframeEnabled )
+        _wireframesGeode->addDrawable( _wireframeGeometry );
+}
+
+
+void MeshCompletionApplication::buildGeometries()
+{        
     osg::ref_ptr< osg::LineWidth > linewidth = new osg::LineWidth( 3.0f );
     _boundariesGeode->getOrCreateStateSet()->setAttributeAndModes( linewidth, osg::StateAttribute::ON );   
     _boundariesGeode->getOrCreateStateSet()->setMode( GL_LIGHTING, osg::StateAttribute::OFF );
@@ -107,39 +120,46 @@ void MeshCompletionApplication::buildGeometries()
 //        osg::ref_ptr< MeshGeometry > patchMeshGeometry = new MeshGeometry( patchCornerTable ); 
 //        osg::ref_ptr< WireframeGeometry > patchWireframGeometry = new WireframeGeometry( patchCornerTable ); 
         
-        _boundariesGeode->addDrawable( boundaryGeometry );   
-        _rootGeode->addDrawable( patchMeshGeometry );   
-        _rootGeode->addDrawable( patchWireframGeometry );   
+        // Boundary
+        _boundariesGeometry.push_back( boundaryGeometry );        
+        if( _isBoundariesEnabled )
+            _boundariesGeode->addDrawable( boundaryGeometry );   
+        
+        // Mesh
+        _patchMeshesGeometry.push_back( patchMeshGeometry );
+        _meshesGeode->addDrawable( patchMeshGeometry );  
+        
+        // Wirefram
+        _patchWireframesGeometry.push_back( patchWireframGeometry );        
+        if( _isWireframeEnabled )
+            _wireframesGeode->addDrawable( patchWireframGeometry );   
     }
-    
-    _scene->addChild( _boundariesGeode );
-    
-    _rootGeode->addDrawable( _meshGeometry );   
-    
-    if( _isWireframeEnabled )
-        _rootGeode->addDrawable( _wireframeGeometry );
         
     // Finalize
-    _rootGeode->setInitialBound( _scene->computeBound() );
+    _meshesGeode->setInitialBound( _scene->computeBound() );
     
     osgUtil::SmoothingVisitor sv;
-    _rootGeode->accept( sv ); 
+    _meshesGeode->accept( sv ); 
 
     _window->getCanvas().realize();    
 }
 
 
 bool MeshCompletionApplication::openFile( std::string file )
-{
-    _rootGeode->removeDrawables( 0, _rootGeode->getNumDrawables() );            
+{          
+    if( _cornerTable )
+    {
+        clearGeometries();
+        clearMesh();
+    }
     
     _cornerTable = OFFMeshLoader().parse( file ); 
     
     if( !_cornerTable )
         return false;
     
-    calculateHoleBoundaries();
-    
+    buildMesh();    
+    calculateHoleBoundaries();    
     buildGeometries();    
     
     return true;
@@ -148,7 +168,7 @@ bool MeshCompletionApplication::openFile( std::string file )
 
 void MeshCompletionApplication::setLightingEnabled( bool isLightingEnabled )
 {
-    _rootGeode->getOrCreateStateSet()->setMode( GL_LIGHTING, 
+    _meshesGeode->getOrCreateStateSet()->setMode( GL_LIGHTING, 
             isLightingEnabled ? osg::StateAttribute::ON : osg::StateAttribute::OFF );
 }
     
@@ -158,9 +178,36 @@ void MeshCompletionApplication::setWireframeEnabled( bool isWireframeEnabled )
     _isWireframeEnabled = isWireframeEnabled;
     
     if( isWireframeEnabled )
-        _rootGeode->addDrawable( _wireframeGeometry );
+    {
+        _wireframesGeode->addDrawable( _wireframeGeometry );
+        
+        for( auto wfGeom : _patchWireframesGeometry )
+            _wireframesGeode->addDrawable( wfGeom );
+    }
     else
-        _rootGeode->removeDrawable( _wireframeGeometry );
+    {
+        _wireframesGeode->removeDrawable( _wireframeGeometry );
+        
+        for( auto wfGeom : _patchWireframesGeometry )
+            _wireframesGeode->removeDrawable( wfGeom );
+    }
+}
+    
+
+void MeshCompletionApplication::setBoundariesEnabled( bool isBoundariesEnabled )
+{
+    _isBoundariesEnabled = isBoundariesEnabled;
+    
+    if( isBoundariesEnabled )
+    {
+        for( auto bGeom : _boundariesGeometry )
+            _boundariesGeode->addDrawable( bGeom );
+    }
+    else
+    {
+        for( auto bGeom : _boundariesGeometry )
+            _boundariesGeode->removeDrawable( bGeom );
+    }
 }
 
 void MeshCompletionApplication::calculateHoleBoundaries()
@@ -849,16 +896,38 @@ std::shared_ptr< CornerTable > MeshCompletionApplication::calculateFairedPatchMe
                         indexArray.size() / 3, vertexArray.size() / 3, 3 );
 }
 
+void MeshCompletionApplication::clearMesh()
+{    
+    _meshesGeode->removeDrawable( _meshGeometry );
+    _wireframesGeode->removeDrawable( _wireframeGeometry );
+}
+
+void MeshCompletionApplication::clearGeometries()
+{    
+    for( auto bGeom : _boundariesGeometry )
+        _boundariesGeode->removeDrawable( bGeom );
+    
+    for( auto mGeom : _patchMeshesGeometry )
+        _meshesGeode->removeDrawable( mGeom );
+    
+    for( auto wfGeom : _patchWireframesGeometry )
+        _wireframesGeode->removeDrawable( wfGeom );
+    
+    _patchMeshesGeometry.clear();
+    _patchWireframesGeometry.clear();
+    _boundariesGeometry.clear();
+}
+
 void MeshCompletionApplication::setFairingMode( FairingMode mode )
 {
     _fairingMode = mode;
     
     if( _cornerTable )
     {
-        _rootGeode->removeDrawables( 0, _rootGeode->getNumDrawables() );
+        clearGeometries();
         //_scene->removeChildren( 0, _scene->getNumChildren() );
         
-        calculateHoleBoundaries();
+        //calculateHoleBoundaries();
         
         buildGeometries();
     }

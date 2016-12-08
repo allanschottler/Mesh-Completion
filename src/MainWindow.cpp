@@ -43,6 +43,7 @@ MainWindow::MainWindow( std::string title ) :
     _aboutButton = GTK_WIDGET( gtk_builder_get_object( builder, "imagemenuitem10" ) );
     _lightingCheckButton = GTK_WIDGET( gtk_builder_get_object( builder, "checkmenuitem2" ) );
     _wireframeCheckButton = GTK_WIDGET( gtk_builder_get_object( builder, "checkmenuitem1" ) );
+    _boundariesCheckButton = GTK_WIDGET( gtk_builder_get_object( builder, "menuitem2" ) );
     
     _noFairingButton = GTK_WIDGET( gtk_builder_get_object( builder, "radiomenuitem1" ) );
     _scaleFairingButton = GTK_WIDGET( gtk_builder_get_object( builder, "radiomenuitem2" ) );
@@ -61,6 +62,7 @@ MainWindow::MainWindow( std::string title ) :
     g_signal_connect( G_OBJECT( _aboutButton ), "activate", G_CALLBACK( &MainWindow::onAboutButtonClicked ), _dialog );
     g_signal_connect( G_OBJECT( _lightingCheckButton ), "toggled", G_CALLBACK( &MainWindow::onLightingButtonClicked ), _dialog );
     g_signal_connect( G_OBJECT( _wireframeCheckButton ), "toggled", G_CALLBACK( &MainWindow::onWireframeButtonClicked ), _dialog );
+    g_signal_connect( G_OBJECT( _boundariesCheckButton ), "toggled", G_CALLBACK( &MainWindow::onBoundariesButtonClicked ), _dialog );
     
     g_signal_connect( G_OBJECT( _noFairingButton ), "activate", G_CALLBACK( &MainWindow::onFairingModeButtonClicked ), _dialog );
     g_signal_connect( G_OBJECT( _scaleFairingButton ), "activate", G_CALLBACK( &MainWindow::onFairingModeButtonClicked ), _dialog );
@@ -204,6 +206,21 @@ gboolean MainWindow::onWireframeButtonClicked( GtkWidget* button, gpointer point
     bool isChecked = gtk_check_menu_item_get_active( GTK_CHECK_MENU_ITEM( dialog->_wireframeCheckButton ) );
     
     MeshCompletionApplication::getInstance()->setWireframeEnabled( isChecked );
+    
+    return TRUE;
+}
+
+gboolean MainWindow::onBoundariesButtonClicked( GtkWidget* button, gpointer pointer )
+{
+    gpointer result = g_object_get_data( ( GObject* ) pointer, "THIS" );
+    
+    if( result == NULL )
+        return FALSE;
+    
+    MainWindow* dialog = reinterpret_cast< MainWindow* >( result );
+    bool isChecked = gtk_check_menu_item_get_active( GTK_CHECK_MENU_ITEM( dialog->_boundariesCheckButton ) );
+    
+    MeshCompletionApplication::getInstance()->setBoundariesEnabled( isChecked );
     
     return TRUE;
 }

@@ -34,6 +34,7 @@ private:
     static gboolean onOpenButtonClicked( GtkWidget* button, gpointer pointer );
     static gboolean onLightingButtonClicked( GtkWidget* button, gpointer pointer );
     static gboolean onWireframeButtonClicked( GtkWidget* button, gpointer pointer );
+    static gboolean onBoundariesButtonClicked( GtkWidget* button, gpointer pointer );
     static gboolean onQuitButtonClicked( GtkWidget* button, gpointer pointer );
     static gboolean onAboutButtonClicked( GtkWidget* button, gpointer pointer );
     static gboolean onFairingModeButtonClicked( GtkWidget* button, gpointer pointer );
@@ -49,6 +50,7 @@ private:
     GtkWidget* _openButton;
     GtkWidget* _lightingCheckButton;
     GtkWidget* _wireframeCheckButton;
+    GtkWidget* _boundariesCheckButton;
     GtkWidget* _quitButton;
     GtkWidget* _aboutButton;
     

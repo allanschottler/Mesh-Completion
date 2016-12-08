@@ -62,7 +62,11 @@ public:
     
     void setLightingEnabled( bool isLightingEnabled );
     
-    void setWireframeEnabled( bool isLightingEnabled );        
+    void setWireframeEnabled( bool isWireframeEnabled );        
+    
+    void setBoundariesEnabled( bool isBoundariesEnabled );        
+    
+    void setFairingMode( FairingMode mode );
     
     void calculateHoleBoundaries();
     
@@ -70,10 +74,8 @@ public:
         
     TriMesh calculateRefinedPatchMesh( std::shared_ptr< CornerTable > patchMesh, HoleBoundary boundary );    
     
-    std::shared_ptr< CornerTable > calculateFairedPatchMesh( TriMesh& mesh );
-    
-    void setFairingMode( FairingMode mode );
-    
+    std::shared_ptr< CornerTable > calculateFairedPatchMesh( TriMesh& mesh );    
+        
 private:
     
     MeshCompletionApplication();    
@@ -93,7 +95,13 @@ private:
     
     static MeshCompletionApplication* _instance;
     
+    void buildMesh();
+    
     void buildGeometries();
+    
+    void clearMesh();
+    
+    void clearGeometries();
         
     MainWindow* _window;
     
@@ -101,16 +109,18 @@ private:
     
     osg::ref_ptr< osg::Group > _scene;
     
-    osg::ref_ptr< osg::Geode > _rootGeode;
-    
+    osg::ref_ptr< osg::Geode > _meshesGeode;    
+    osg::ref_ptr< osg::Geode > _wireframesGeode;    
     osg::ref_ptr< osg::Geode > _boundariesGeode;
     
-    osg::ref_ptr< MeshGeometry > _meshGeometry;
-    
-    osg::ref_ptr< WireframeGeometry > _wireframeGeometry;   
-    
+    osg::ref_ptr< MeshGeometry > _meshGeometry;    
+    osg::ref_ptr< WireframeGeometry > _wireframeGeometry;
+    std::vector< osg::ref_ptr< MeshGeometry > > _patchMeshesGeometry;
+    std::vector< osg::ref_ptr< WireframeGeometry > > _patchWireframesGeometry;
+    std::vector< osg::ref_ptr< BoundaryGeometry > > _boundariesGeometry;
     
     bool _isWireframeEnabled;
+    bool _isBoundariesEnabled;
     
     std::vector< HoleBoundary > _boundaries;
     
