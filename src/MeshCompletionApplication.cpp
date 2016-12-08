@@ -695,7 +695,7 @@ TriMesh MeshCompletionApplication::calculateRefinedPatchMesh( std::shared_ptr< C
                 // Relax
                 TriMesh::VertexHandle centroidHandle = mesh.split( *triangleIt, centroid ); //splitFace( mesh, *triangleIt, centroid );                      
                                     
-                std::cout << "centroid: " << centroidHandle.idx() << "\n";
+                //std::cout << "centroid: " << centroidHandle.idx() << "\n";
                 
                 TriMesh::VertexFaceIter faceStartIt = mesh.vf_begin( centroidHandle );
                 //TriMesh::VertexFaceIter faceEndIt = mesh.vf_end( centroidHandle );
@@ -704,13 +704,13 @@ TriMesh MeshCompletionApplication::calculateRefinedPatchMesh( std::shared_ptr< C
                 // Para cada face do centroide
                 for( ; faceIt.is_valid(); ++faceIt )
                 {      
-                    TriMesh::FaceVertexIter vIt = mesh.fv_begin( *faceIt );
+                    /*TriMesh::FaceVertexIter vIt = mesh.fv_begin( *faceIt );
 
                     TriMesh::VertexHandle v1 = *vIt; vIt++;
                     TriMesh::VertexHandle v2 = *vIt; vIt++;
                     TriMesh::VertexHandle v3 = *vIt; 
 
-                    std::cout << "indexes: " << v1.idx() << " " << v2.idx() << " " << v3.idx() << "\n";
+                    std::cout << "indexes: " << v1.idx() << " " << v2.idx() << " " << v3.idx() << "\n";*/
 
                     /**********************************************************************/
                     TriMesh::FaceEdgeIter edgeStartIt = mesh.fe_begin( *faceIt );
@@ -743,7 +743,7 @@ TriMesh MeshCompletionApplication::calculateRefinedPatchMesh( std::shared_ptr< C
         for( auto edgeHandle : edgesToFlip )
         { 
             if( relaxEdge( mesh, edgeHandle ) )
-                std::cout << "flipped\n";
+                ;//std::cout << "flipped\n";
         }
         
         if( !hadCreatedTriangles )
@@ -769,6 +769,9 @@ std::shared_ptr< CornerTable > MeshCompletionApplication::calculateFairedPatchMe
     if( _fairingMode != NONE )
     {
         std::vector< double > edgeWeights;    
+        edgeWeights.resize( mesh.n_edges() );
+        std::vector< TriMesh::Point > vertexDisplacements( mesh.n_vertices(), TriMesh::Point( 0., 0., 0. ) );
+        
         TriMesh::EdgeIter edgeIt = mesh.edges_begin();
 
         for( ; edgeIt != mesh.edges_end(); ++edgeIt )
@@ -778,7 +781,9 @@ std::shared_ptr< CornerTable > MeshCompletionApplication::calculateFairedPatchMe
             
             if( _fairingMode == SCALAR )
             {
-                edgeWeights.push_back( 1. / mesh.calc_edge_length( *edgeIt ) );            
+                assert( mesh.calc_edge_length( *edgeIt ) != 0 );
+                
+                edgeWeights[ edgeIt->idx() ] = ( 1. / mesh.calc_edge_length( *edgeIt ) );            
             }
             else if( _fairingMode == HARMONIC )
             {
@@ -798,23 +803,15 @@ std::shared_ptr< CornerTable > MeshCompletionApplication::calculateFairedPatchMe
                 TriMesh::Normal n10 = mesh.calc_edge_vector( h10 );
                 TriMesh::Normal n11 = mesh.calc_edge_vector( h11 );
                 double a1 = std::acos( OpenMesh::dot( n10, n11 ) );
-                
-//                TriMesh::FaceHandle f0 = mesh.face_handle( h0 );
-//                TriMesh::FaceHandle f1 = mesh.face_handle( h1 );
-//                
-//                TriMesh::Normal nRef( 0., 1., 0. );
-//                TriMesh::Normal n0 = mesh.calc_face_normal( f0 );
-//                TriMesh::Normal n1 = mesh.calc_face_normal( f1 );
-//                
-//                double a0 = std::acos( OpenMesh::dot( nRef, n0 ) );
-//                double a1 = std::acos( OpenMesh::dot( nRef, n1 ) );
+                                
+                assert( std::tan( a0 ) != 0 && std::tan( a1 ) != 0 );
                 
                 double weight = ( 1. / std::tan( a0 ) ) + ( 1. / std::tan( a1 ) );
                 
-                edgeWeights.push_back( weight );
+                edgeWeights[ edgeIt->idx() ] = weight;
             }
         }
-
+        
         // Fairing
         TriMesh::VertexIter vertexIt = mesh.vertices_begin();
 
@@ -839,14 +836,21 @@ std::shared_ptr< CornerTable > MeshCompletionApplication::calculateFairedPatchMe
                 avgPoint += edgeWeights[ veIt->idx() ] * ( ( v0.idx() == vertexIt->idx() ) ? mesh.point( v1 ) : mesh.point( v0 ) );
             }
 
+            assert( vertexWeight );
+            
             TriMesh::Point v = mesh.point( *vertexIt );
             TriMesh::Point u = -v + ( avgPoint / vertexWeight );
-            //TriMesh::Point u2 = -u + ( ( avgPoint * u ) / vertexWeight );
             
-            /*if( _fairingMode == SECOND_ORDER )
-                mesh.set_point( *vertexIt, v + u2 );
-            else*/
-                mesh.set_point( *vertexIt, v + u );
+            vertexDisplacements[ vertexIt->idx() ] = u;
+            //TriMesh::Point u2 = -u + ( ( avgPoint * u ) / vertexWeight );            
+        }
+        
+        vertexIt = mesh.vertices_begin();
+
+        for( ; vertexIt != mesh.vertices_end(); ++vertexIt )
+        {            
+            TriMesh::Point v = mesh.point( *vertexIt ) + vertexDisplacements[ vertexIt->idx() ];
+            mesh.set_point( *vertexIt, v );
         }
     }
     
@@ -857,18 +861,39 @@ std::shared_ptr< CornerTable > MeshCompletionApplication::calculateFairedPatchMe
     for( TriMesh::VertexIter vIt = mesh.vertices_begin(); vIt != mesh.vertices_end(); ++vIt )
     {
         auto point = mesh.point( *vIt );
+        
+        try {
         vertexArray.push_back( point[ 0 ] );
         vertexArray.push_back( point[ 1 ] );
         vertexArray.push_back( point[ 2 ] );
+        } catch (const std::exception& ex) {
+            std::cout << "ex" << "\n";
+        } catch (const std::string& ex) {
+            std::cout << ex << "\n";
+        } catch (...) {
+            std::cout << "ex" << "\n";
+        } 
     }
     
     for( TriMesh::FaceIter fIt = mesh.faces_begin(); fIt != mesh.faces_end(); ++fIt )
     {
         TriMesh::ConstFaceVertexIter fvIt = mesh.cfv_iter( *fIt );
         
-        indexArray.push_back( fvIt->idx() ); fvIt++;
-        indexArray.push_back( fvIt->idx() ); fvIt++;
-        indexArray.push_back( fvIt->idx() );
+        int i0 = fvIt->idx(); fvIt++;
+        int i1 = fvIt->idx(); fvIt++;
+        int i2 = fvIt->idx();
+        
+        try { 
+        indexArray.push_back( i0 );
+        indexArray.push_back( i1 );
+        indexArray.push_back( i2 );
+        } catch (const std::exception& ex) {
+            std::cout << "ex" << "\n";
+        } catch (const std::string& ex) {
+            std::cout << ex << "\n";
+        } catch (...) {
+            std::cout << "ex" << "\n";
+        } 
     }
         
     //DONE
