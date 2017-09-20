@@ -13,4 +13,5 @@ Patched (wireframe):
 ![alt text](https://github.com/allanschottler/Mesh-Completion/blob/master/data/s4.png)
 
 Faired:
+
 ![alt text](https://github.com/allanschottler/Mesh-Completion/blob/master/data/s5.png)
